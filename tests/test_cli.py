@@ -54,6 +54,44 @@ def test_brief_reports_cascode_pattern() -> None:
     assert "intermediate_net=ncas" in result.output
 
 
+def test_annotate_reports_device_roles_and_net_labels() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["annotate", "examples/simple_diff_pair.sp", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    devices = {device["name"]: device for device in payload["devices"]}
+    assert any(role["role"] == "differential_pair" for role in devices["M1"]["roles"])
+    assert any(role["role"] == "active_load" for role in devices["M4"]["roles"])
+
+    nets = {net["name"]: net for net in payload["nets"]}
+    assert any(label["label"] == "differential_input" for label in nets["vinp"]["labels"])
+    assert any(label["label"] == "bias" for label in nets["vbias"]["labels"])
+    assert not any(label["label"] == "input_candidate" for label in nets["vbias"]["labels"])
+    assert any(label["label"] == "loaded_output" for label in nets["voutp"]["labels"])
+
+
+def test_annotate_reports_cascode_net_labels() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "annotate",
+            "examples/cascode_stage.sp",
+            "--topcell",
+            "cascode_stage",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    nets = {net["name"]: net for net in json.loads(result.output)["nets"]}
+    assert any(label["label"] == "cascode_internal" for label in nets["ncas"]["labels"])
+    assert any(label["label"] == "bias" for label in nets["vbias_cas"]["labels"])
+
+
 def test_benchmark_seed_tasks_pass() -> None:
     result = CliRunner().invoke(
         main,

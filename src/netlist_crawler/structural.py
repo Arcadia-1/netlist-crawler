@@ -417,6 +417,71 @@ def explain_device(circuit: StructuralCircuit, device_name: str) -> dict:
     }
 
 
+def annotate_circuit(circuit: StructuralCircuit) -> dict:
+    """Return device roles and net labels derived from structural evidence."""
+    matches = detect_semantics(circuit, "all")
+    device_roles: dict[str, list[dict]] = {
+        device.name: [] for device in circuit.devices
+    }
+    net_labels: dict[str, list[dict]] = {
+        net: [] for net in circuit.nets()
+    }
+
+    for match in matches:
+        for device in match["devices"]:
+            device_roles.setdefault(device, []).append({
+                "role": match["pattern"],
+                "confidence": match["confidence"],
+            })
+        _apply_net_labels_from_match(net_labels, match)
+
+    for net, pins in circuit.nets().items():
+        if net in COMMON_NETS:
+            _add_net_label(net_labels, net, "supply", 0.95, {"reason": "common net name"})
+        gate_pins = [pin for pin in pins if pin.endswith(".G")]
+        non_gate_pins = [pin for pin in pins if not pin.endswith(".G")]
+        if gate_pins and not non_gate_pins and not _looks_like_bias_gate(net):
+            _add_net_label(
+                net_labels,
+                net,
+                "input_candidate",
+                0.66,
+                {"gate_pins": gate_pins},
+            )
+        if _looks_like_bias_gate(net):
+            _add_net_label(
+                net_labels,
+                net,
+                "bias",
+                0.78,
+                {"reason": "bias-like net name"},
+            )
+
+    return {
+        "source": circuit.source,
+        "topcell": circuit.topcell,
+        "devices": [
+            {
+                "name": device.name,
+                "kind": device.kind,
+                "model": device.model,
+                "pins": device.pins,
+                "roles": device_roles.get(device.name, []),
+            }
+            for device in circuit.devices
+        ],
+        "nets": [
+            {
+                "name": net,
+                "pins": pins,
+                "labels": net_labels.get(net, []),
+            }
+            for net, pins in circuit.nets().items()
+        ],
+        "patterns": matches,
+    }
+
+
 def dumps_json(data: dict) -> str:
     return json.dumps(data, indent=2, sort_keys=True)
 
@@ -595,6 +660,46 @@ def _detect_cascodes(circuit: StructuralCircuit) -> list[dict]:
 def _looks_like_bias_gate(net: str) -> bool:
     n = net.lower()
     return "bias" in n or n.startswith(("vb", "vcas", "vbn", "vbp"))
+
+
+def _apply_net_labels_from_match(net_labels: dict[str, list[dict]], match: dict) -> None:
+    evidence = match["evidence"]
+    if match["pattern"] == "differential_pair":
+        for net in evidence["gate_nets"]:
+            _add_net_label(net_labels, net, "differential_input", 0.82, {"pattern": "differential_pair"})
+        for net in evidence["drain_nets"]:
+            _add_net_label(net_labels, net, "output_candidate", 0.72, {"pattern": "differential_pair"})
+    elif match["pattern"] == "tail_current_source":
+        _add_net_label(net_labels, evidence["gate_net"], "bias", 0.84, {"pattern": "tail_current_source"})
+        _add_net_label(net_labels, evidence["drain_connected_to_diff_pair_source"], "tail", 0.82, {"pattern": "tail_current_source"})
+    elif match["pattern"] == "current_mirror":
+        _add_net_label(net_labels, evidence["shared_gate"], "bias_or_mirror_control", 0.76, {"pattern": "current_mirror"})
+    elif match["pattern"] == "active_load":
+        for net in evidence["loaded_drain_nets"]:
+            _add_net_label(net_labels, net, "loaded_output", 0.82, {"pattern": "active_load"})
+    elif match["pattern"] == "cascode":
+        _add_net_label(net_labels, evidence["upper_gate"], "bias", 0.84, {"pattern": "cascode"})
+        _add_net_label(net_labels, evidence["intermediate_net"], "cascode_internal", 0.8, {"pattern": "cascode"})
+        _add_net_label(net_labels, evidence["output_net"], "output_candidate", 0.76, {"pattern": "cascode"})
+
+
+def _add_net_label(
+    net_labels: dict[str, list[dict]],
+    net: str | None,
+    label: str,
+    confidence: float,
+    evidence: dict,
+) -> None:
+    if not net:
+        return
+    labels = net_labels.setdefault(net, [])
+    if any(item["label"] == label for item in labels):
+        return
+    labels.append({
+        "label": label,
+        "confidence": confidence,
+        "evidence": evidence,
+    })
 
 
 def _logical_lines(path: Path, *, seen: set[Path] | None = None) -> Iterable[str]:

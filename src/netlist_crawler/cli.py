@@ -9,6 +9,7 @@ import click
 from .benchmark import run_benchmark
 from .structural import (
     COMMON_NETS,
+    annotate_circuit,
     detect_semantics,
     dumps_json,
     explain_device,
@@ -22,6 +23,33 @@ from .structural import (
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def main() -> None:
     """Semantic static analysis for LLM-assisted analog circuit understanding."""
+
+
+@main.command()
+@click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def annotate(
+    netlist: Path,
+    topcell: str | None,
+    expand_depth: int,
+    output_format: str,
+) -> None:
+    """Annotate devices and nets with structural semantic labels."""
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    annotation = annotate_circuit(circuit)
+    if output_format == "json":
+        click.echo(dumps_json(annotation))
+        return
+    click.echo("Device roles:")
+    for device in annotation["devices"]:
+        roles = ", ".join(role["role"] for role in device["roles"]) or "none"
+        click.echo(f"- {device['name']}: {roles}")
+    click.echo("Net labels:")
+    for net in annotation["nets"]:
+        labels = ", ".join(label["label"] for label in net["labels"]) or "none"
+        click.echo(f"- {net['name']}: {labels}")
 
 
 @main.command()
