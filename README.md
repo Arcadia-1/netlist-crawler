@@ -33,8 +33,8 @@ At a glance:
 |---|---|
 | LLM-readable circuit context | `brief`, `annotate` |
 | Structural discovery | `list-subckts`, `summarize` |
-| Graph queries | `neighborhood`, `path` |
-| Analog semantics | `detect`, `explain` |
+| Graph queries | `neighborhood`, `path`, `export-graph` |
+| Analog semantics | `detect`, `explain`, `explain-net`, `classify-path` |
 | Evaluation hooks | `benchmark` |
 | Post-layout parasitic analysis | `scan`, `prescribe`, `inject` |
 
@@ -73,29 +73,35 @@ netlist-crawler summarize examples/param_subckt.sp --topcell param_amp --format 
 netlist-crawler summarize examples/two_subckts.sp --topcell bias_block --format json
 netlist-crawler summarize examples/include_top.sp --topcell include_top --expand-depth 1 --format json
 netlist-crawler summarize examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
-netlist-crawler neighborhood examples/simple_diff_pair.sp --net vout --depth 2
+netlist-crawler neighborhood examples/simple_diff_pair.sp --net voutp --depth 2
 netlist-crawler neighborhood examples/rail_bridge.sp --topcell rail_bridge --net a --depth 3 --max-degree 1
-netlist-crawler path examples/simple_diff_pair.sp --from vinp --to vout
+netlist-crawler path examples/simple_diff_pair.sp --from vinp --to voutp
 netlist-crawler path examples/rail_bridge.sp --topcell rail_bridge --from a --to b --exclude-common-nets
 netlist-crawler detect examples/simple_diff_pair.sp --pattern diff-pair
 netlist-crawler detect examples/cascode_stage.sp --topcell cascode_stage --pattern cascode
 netlist-crawler explain examples/simple_diff_pair.sp --device M1
+netlist-crawler explain-net examples/simple_diff_pair.sp --net vbias --format json
+netlist-crawler classify-path examples/simple_diff_pair.sp --from vinp --to voutp --format json
+netlist-crawler export-graph examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
 ```
 
 `annotate` labels devices and nets with semantic roles. `brief` emits a compact
 LLM-readable summary with topology counts, high-degree nets, and
-semantic-pattern evidence. `summarize`, `neighborhood`, and `path` operate on a
-lightweight SPICE-like structural parser, support `--topcell` for subcircuit
-selection, and support relative `.include` files plus `--expand-depth` for
-hierarchical instance expansion, including simple named-port X instances. It
-preserves `.param` values and `.subckt` default parameters as metadata. All
-structural commands support `--format json` for agent use. Path and neighborhood
-traversal can exclude common rails or explicit project nets with
-`--exclude-common-nets` and `--exclude-net`; `--max-degree` keeps very
-high-degree nets visible without letting them dominate traversal. The semantic
-detector and device explanation commands include first-pass rules for
-differential pairs, current mirrors, tail current sources, active loads, and
-cascodes, with evidence and confidence fields in JSON output.
+semantic-pattern evidence. `summarize`, `neighborhood`, `path`,
+`classify-path`, and `export-graph` operate on a lightweight SPICE-like
+structural parser, support `--topcell` for subcircuit selection, and support
+relative `.include` files plus `--expand-depth` for hierarchical instance
+expansion, including simple named-port X instances. It preserves `.param`
+values and `.subckt` default parameters as metadata. All structural commands
+support `--format json` for agent use. Path and neighborhood traversal can
+exclude common rails or explicit project nets with `--exclude-common-nets` and
+`--exclude-net`; `--max-degree` keeps very high-degree nets visible without
+letting them dominate traversal. The semantic detector, device explanation,
+net explanation, and path classification commands include first-pass rules for
+differential pairs, current mirrors, tail current sources, active loads,
+cascodes, signal/bias/supply path evidence, and confidence fields in JSON
+output. `export-graph` emits a stable bipartite device-net graph in JSON or
+GraphML for downstream agent workflows and visualization.
 
 `benchmark` runs JSON task files that assert expected structural and semantic
 behavior. The seed task file is intentionally small; it is the starting point
@@ -139,6 +145,8 @@ import netlist_crawler as nc
 circuit = nc.parse_structural_netlist(Path("examples/simple_diff_pair.sp"))
 print(circuit.summary())
 print(nc.detect_semantics(circuit, "diff-pair"))
+print(nc.explain_net(circuit, "vbias"))
+print(nc.classify_path(circuit, "vinp", "voutp"))
 ```
 
 ## Relationship to Workflow Repositories

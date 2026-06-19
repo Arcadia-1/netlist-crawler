@@ -539,3 +539,108 @@ def test_detect_and_explain_cascode_role() -> None:
     assert explained.exit_code == 0
     roles = json.loads(explained.output)["roles"]
     assert any(role["pattern"] == "cascode" for role in roles)
+
+
+def test_explain_net_reports_bias_semantics() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "explain-net",
+            "examples/simple_diff_pair.sp",
+            "--net",
+            "vbias",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["found"] is True
+    assert payload["pin_roles"] == {"G": 1}
+    assert any(item["class"] == "bias" for item in payload["classes"])
+    assert payload["devices"][0]["device"] == "M3"
+
+
+def test_explain_net_distinguishes_mirror_control_from_bias() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "explain-net",
+            "examples/simple_diff_pair.sp",
+            "--net",
+            "voutp",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    classes = {item["class"] for item in json.loads(result.output)["classes"]}
+    assert "signal_output" in classes
+    assert "mirror_control" in classes
+    assert "bias" not in classes
+
+
+def test_classify_path_reports_signal_path() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "classify-path",
+            "examples/simple_diff_pair.sp",
+            "--from",
+            "vinp",
+            "--to",
+            "voutp",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["found"] is True
+    assert payload["path"] == ["vinp", "M1", "voutp"]
+    assert payload["path_type"] == "signal_path"
+    assert payload["confidence"] >= 0.75
+
+
+def test_export_graph_json_includes_semantic_nodes_and_edges() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "export-graph",
+            "examples/simple_diff_pair.sp",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["schema"] == "netlist-crawler.graph.v1"
+    assert any(node["id"] == "device:M1" for node in payload["nodes"])
+    assert any(node["id"] == "net:vinp" for node in payload["nodes"])
+    assert any(
+        edge["source"] == "device:M1" and edge["target"] == "net:vinp" and edge["role"] == "G"
+        for edge in payload["edges"]
+    )
+    vinp = next(node for node in payload["nodes"] if node["id"] == "net:vinp")
+    assert any(item["class"] == "signal_input" for item in vinp["classes"])
+
+
+def test_export_graph_graphml_smoke() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "export-graph",
+            "examples/simple_diff_pair.sp",
+            "--format",
+            "graphml",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output.startswith("<?xml")
+    assert '<node id="device:M1">' in result.output
+    assert '<data key="role">G</data>' in result.output

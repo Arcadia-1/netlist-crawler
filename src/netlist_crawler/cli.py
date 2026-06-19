@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 import click
 
@@ -10,9 +11,12 @@ from .benchmark import run_benchmark
 from .structural import (
     COMMON_NETS,
     annotate_circuit,
+    classify_path as structural_classify_path,
     detect_semantics,
     dumps_json,
     explain_device,
+    explain_net as structural_explain_net,
+    export_graph as structural_export_graph,
     list_subcircuits,
     neighborhood as structural_neighborhood,
     net_path,
@@ -182,6 +186,41 @@ def neighborhood(
         click.echo(f"  {label}: {pins}")
 
 
+@main.command("explain-net")
+@click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--net", "net_name", required=True, help="Net name to explain.")
+@click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def explain_net(
+    netlist: Path,
+    net_name: str,
+    topcell: str | None,
+    expand_depth: int,
+    output_format: str,
+) -> None:
+    """Explain the likely semantic role of a net."""
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    result = structural_explain_net(circuit, net_name)
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        return
+    if not result["found"]:
+        click.echo(f"Net not found: {net_name}")
+        return
+    click.echo(f"Net: {net_name}")
+    click.echo(f"Degree: {result['degree']}")
+    click.echo("Classes: " + _format_classes(result["classes"]))
+    click.echo("Pin roles: " + _format_counts(result["pin_roles"]))
+    click.echo("Labels: " + _format_labels(result["labels"]))
+    click.echo("Devices:")
+    for device in result["devices"]:
+        click.echo(
+            f"  {device['device']}.{device['role']} "
+            f"({device['kind']}, {device['model'] or 'unknown'})"
+        )
+
+
 @main.command()
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--from", "source", required=True, help="Source net.")
@@ -219,6 +258,50 @@ def path(
         click.echo(f"No structural path from {source} to {target}: {result['reason']}")
         return
     click.echo(" -> ".join(result["path"]))
+
+
+@main.command("classify-path")
+@click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--from", "source", required=True, help="Source net.")
+@click.option("--to", "target", required=True, help="Target net.")
+@click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
+@click.option("--exclude-common-nets", is_flag=True, help="Do not traverse common rails.")
+@click.option("--exclude-net", multiple=True, help="Net to exclude from traversal.")
+@click.option("--max-degree", type=int, help="Exclude high-degree intermediate nets from path search.")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def classify_path(
+    netlist: Path,
+    source: str,
+    target: str,
+    topcell: str | None,
+    expand_depth: int,
+    exclude_common_nets: bool,
+    exclude_net: tuple[str, ...],
+    max_degree: int | None,
+    output_format: str,
+) -> None:
+    """Find and classify a likely analog path between two nets."""
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    result = structural_classify_path(
+        circuit,
+        source,
+        target,
+        exclude_nets=_exclude_nets(exclude_common_nets, exclude_net),
+        max_degree=max_degree,
+    )
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        return
+    if not result["found"]:
+        click.echo(f"No structural path from {source} to {target}: {result['reason']}")
+        return
+    click.echo(
+        f"{result['path_type']} (confidence={result['confidence']}): "
+        + " -> ".join(result["path"])
+    )
+    for reason in result["evidence"]["reasons"]:
+        click.echo(f"  evidence: {reason}")
 
 
 @main.command()
@@ -287,6 +370,28 @@ def explain(
             f"  {role['pattern']} with {', '.join(role['devices'])} "
             f"(confidence={role['confidence']})"
         )
+
+
+@main.command("export-graph")
+@click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
+@click.option("--no-semantics", is_flag=True, help="Omit semantic labels and pattern matches.")
+@click.option("--format", "output_format", type=click.Choice(["json", "graphml"]), default="json")
+def export_graph(
+    netlist: Path,
+    topcell: str | None,
+    expand_depth: int,
+    no_semantics: bool,
+    output_format: str,
+) -> None:
+    """Export the device-net graph for downstream workflows."""
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    graph = structural_export_graph(circuit, include_semantics=not no_semantics)
+    if output_format == "graphml":
+        click.echo(_graph_to_graphml(graph))
+        return
+    click.echo(dumps_json(graph))
 
 
 @main.command(
@@ -375,10 +480,59 @@ def _format_top_nets(top_nets: list[dict]) -> str:
     return ", ".join(f"{item['net']}({item['degree']})" for item in top_nets[:8])
 
 
+def _format_classes(classes: list[dict]) -> str:
+    if not classes:
+        return "none"
+    return ", ".join(
+        f"{item['class']}({item['confidence']})"
+        for item in classes
+    )
+
+
+def _format_labels(labels: list[dict]) -> str:
+    if not labels:
+        return "none"
+    return ", ".join(
+        f"{item['label']}({item['confidence']})"
+        for item in labels
+    )
+
+
 def _brief_value(value) -> str:
     if isinstance(value, list):
         return "/".join(str(item) for item in value)
     return str(value)
+
+
+def _graph_to_graphml(graph: dict) -> str:
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<graphml xmlns="http://graphml.graphdrawing.org/xmlns">',
+        '  <key id="kind" for="node" attr.name="kind" attr.type="string"/>',
+        '  <key id="name" for="node" attr.name="name" attr.type="string"/>',
+        '  <key id="type" for="node" attr.name="type" attr.type="string"/>',
+        '  <key id="degree" for="node" attr.name="degree" attr.type="int"/>',
+        '  <key id="role" for="edge" attr.name="role" attr.type="string"/>',
+        '  <graph id="netlist" edgedefault="undirected">',
+    ]
+    for node in graph["nodes"]:
+        lines.append(f'    <node id="{escape(node["id"])}">')
+        for key in ("type", "name", "kind", "degree"):
+            if key in node:
+                lines.append(f'      <data key="{key}">{escape(str(node[key]))}</data>')
+        lines.append("    </node>")
+    for index, edge in enumerate(graph["edges"]):
+        lines.append(
+            f'    <edge id="e{index}" source="{escape(edge["source"])}" '
+            f'target="{escape(edge["target"])}">'
+        )
+        lines.append(f'      <data key="role">{escape(edge["role"])}</data>')
+        lines.append("    </edge>")
+    lines.extend([
+        "  </graph>",
+        "</graphml>",
+    ])
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

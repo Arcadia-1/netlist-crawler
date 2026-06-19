@@ -382,6 +382,169 @@ def net_path(
     }
 
 
+def explain_net(circuit: StructuralCircuit, net_name: str) -> dict:
+    """Explain structural and semantic evidence for one net."""
+    return _explain_net_from_annotation(circuit, net_name, annotate_circuit(circuit))
+
+
+def _explain_net_from_annotation(
+    circuit: StructuralCircuit,
+    net_name: str,
+    annotation: dict,
+) -> dict:
+    nets = circuit.nets()
+    pins = nets.get(net_name)
+    if pins is None:
+        return {"net": net_name, "found": False, "labels": [], "devices": []}
+
+    label_map = {
+        net["name"]: net["labels"]
+        for net in annotation["nets"]
+    }
+    devices = circuit.device_by_name()
+    connected = []
+    pin_roles: Counter[str] = Counter()
+    device_kinds: Counter[str] = Counter()
+    for pin in pins:
+        device_name, role = pin.rsplit(".", 1)
+        device = devices[device_name]
+        pin_roles[role] += 1
+        device_kinds[device.kind] += 1
+        connected.append({
+            "device": device.name,
+            "kind": device.kind,
+            "model": device.model,
+            "role": role,
+            "pins": device.pins,
+        })
+
+    labels = label_map.get(net_name, [])
+    classes = _net_classes_from_labels(net_name, labels, pin_roles)
+    return {
+        "net": net_name,
+        "found": True,
+        "degree": len(pins),
+        "pins": pins,
+        "pin_roles": dict(sorted(pin_roles.items())),
+        "device_kinds": dict(sorted(device_kinds.items())),
+        "labels": labels,
+        "classes": classes,
+        "devices": connected,
+    }
+
+
+def classify_path(
+    circuit: StructuralCircuit,
+    source: str,
+    target: str,
+    *,
+    exclude_nets: set[str] | None = None,
+    max_degree: int | None = None,
+) -> dict:
+    """Find a path and classify its likely analog intent."""
+    path = net_path(
+        circuit,
+        source,
+        target,
+        exclude_nets=exclude_nets,
+        max_degree=max_degree,
+    )
+    if not path["found"]:
+        return {
+            **path,
+            "path_type": "unknown",
+            "confidence": 0.0,
+            "evidence": {"reason": path["reason"]},
+        }
+
+    annotation = annotate_circuit(circuit)
+    circuit_nets = circuit.nets()
+    devices = circuit.device_by_name()
+    net_nodes = [node for node in path["path"] if node in circuit_nets]
+    device_nodes = [node for node in path["path"] if node in devices]
+    net_classes = {
+        net: _explain_net_from_annotation(circuit, net, annotation).get("classes", [])
+        for net in net_nodes
+    }
+
+    path_type, confidence, reasons = _classify_path_evidence(
+        source,
+        target,
+        net_classes,
+        device_nodes,
+    )
+    return {
+        **path,
+        "path_type": path_type,
+        "confidence": confidence,
+        "evidence": {
+            "net_classes": net_classes,
+            "device_nodes": device_nodes,
+            "reasons": reasons,
+        },
+    }
+
+
+def export_graph(circuit: StructuralCircuit, *, include_semantics: bool = True) -> dict:
+    """Export a stable bipartite graph for downstream workflows."""
+    annotations = annotate_circuit(circuit) if include_semantics else None
+    device_roles = {}
+    net_labels = {}
+    patterns = []
+    if annotations is not None:
+        device_roles = {
+            device["name"]: device["roles"]
+            for device in annotations["devices"]
+        }
+        net_labels = {
+            net["name"]: net["labels"]
+            for net in annotations["nets"]
+        }
+        patterns = annotations["patterns"]
+
+    nodes = []
+    edges = []
+    for device in circuit.devices:
+        nodes.append({
+            "id": f"device:{device.name}",
+            "type": "device",
+            "name": device.name,
+            "kind": device.kind,
+            "model": device.model,
+            "scope": device.scope,
+            "params": device.params,
+            "roles": device_roles.get(device.name, []),
+        })
+        for role, net in device.pins.items():
+            edges.append({
+                "source": f"device:{device.name}",
+                "target": f"net:{net}",
+                "type": "pin",
+                "role": role,
+            })
+
+    for net, pins in circuit.nets().items():
+        labels = net_labels.get(net, [])
+        nodes.append({
+            "id": f"net:{net}",
+            "type": "net",
+            "name": net,
+            "degree": len(pins),
+            "pins": pins,
+            "labels": labels,
+            "classes": _net_classes_from_labels(net, labels, _pin_roles_from_pins(pins)),
+        })
+
+    return {
+        "schema": "netlist-crawler.graph.v1",
+        "source": circuit.source,
+        "summary": circuit.summary(),
+        "nodes": sorted(nodes, key=lambda item: item["id"]),
+        "edges": sorted(edges, key=lambda item: (item["source"], item["target"], item["role"])),
+        "patterns": patterns,
+    }
+
+
 def detect_semantics(circuit: StructuralCircuit, pattern: str = "all") -> list[dict]:
     """Detect first-pass analog semantic patterns with explicit evidence."""
     wanted = pattern.lower().replace("_", "-")
@@ -662,6 +825,141 @@ def _detect_cascodes(circuit: StructuralCircuit) -> list[dict]:
                 "confidence": round(min(confidence, 0.9), 2),
             })
     return hits
+
+
+def _pin_roles_from_pins(pins: list[str]) -> Counter[str]:
+    roles: Counter[str] = Counter()
+    for pin in pins:
+        if "." not in pin:
+            continue
+        _, role = pin.rsplit(".", 1)
+        roles[role] += 1
+    return roles
+
+
+def _net_classes_from_labels(
+    net: str,
+    labels: list[dict],
+    pin_roles: Counter[str],
+) -> list[dict]:
+    classes = []
+    label_names = {item["label"] for item in labels}
+    if net in COMMON_NETS:
+        classes.append({
+            "class": "supply",
+            "confidence": 0.95,
+            "evidence": {"reason": "common net name"},
+        })
+    if "bias" in label_names:
+        classes.append({
+            "class": "bias",
+            "confidence": 0.82,
+            "evidence": {"labels": sorted(label_names)},
+        })
+    if "bias_or_mirror_control" in label_names:
+        classes.append({
+            "class": "mirror_control",
+            "confidence": 0.72,
+            "evidence": {"labels": sorted(label_names)},
+        })
+    if "differential_input" in label_names or "input_candidate" in label_names:
+        classes.append({
+            "class": "signal_input",
+            "confidence": 0.78,
+            "evidence": {"labels": sorted(label_names)},
+        })
+    if "loaded_output" in label_names or "output_candidate" in label_names:
+        classes.append({
+            "class": "signal_output",
+            "confidence": 0.76,
+            "evidence": {"labels": sorted(label_names)},
+        })
+    if "tail" in label_names:
+        classes.append({
+            "class": "tail",
+            "confidence": 0.82,
+            "evidence": {"labels": sorted(label_names)},
+        })
+    if "cascode_internal" in label_names:
+        classes.append({
+            "class": "internal_cascode",
+            "confidence": 0.8,
+            "evidence": {"labels": sorted(label_names)},
+        })
+    if pin_roles and not classes:
+        if set(pin_roles) == {"G"} and not _looks_like_bias_gate(net):
+            classes.append({
+                "class": "signal_input",
+                "confidence": 0.62,
+                "evidence": {"pin_roles": dict(sorted(pin_roles.items()))},
+            })
+        elif pin_roles.get("D", 0) >= 1:
+            classes.append({
+                "class": "internal_or_output",
+                "confidence": 0.55,
+                "evidence": {"pin_roles": dict(sorted(pin_roles.items()))},
+            })
+    return classes
+
+
+def _classify_path_evidence(
+    source: str,
+    target: str,
+    net_classes: dict[str, list[dict]],
+    device_nodes: list[str],
+) -> tuple[str, float, list[str]]:
+    source_classes = _class_names(net_classes.get(source, []))
+    target_classes = _class_names(net_classes.get(target, []))
+    all_classes = {
+        klass
+        for classes in net_classes.values()
+        for klass in _class_names(classes)
+    }
+    reasons = []
+
+    if "supply" in all_classes:
+        reasons.append("path touches a common supply or ground net")
+        return "supply_path", 0.86, reasons
+    if _is_feedback_candidate(source, target):
+        reasons.append("endpoint names suggest a feedback relationship")
+        return "feedback_path", 0.68, reasons
+    if (
+        "signal_input" in source_classes
+        and ("signal_output" in target_classes or "internal_or_output" in target_classes)
+    ):
+        reasons.append("source looks like signal input and target looks like output")
+        return "signal_path", 0.8, reasons
+    if (
+        "signal_input" in target_classes
+        and ("signal_output" in source_classes or "internal_or_output" in source_classes)
+    ):
+        reasons.append("target looks like signal input and source looks like output")
+        return "signal_path", 0.78, reasons
+    if (
+        "bias" in source_classes
+        or "bias" in target_classes
+        or "mirror_control" in source_classes
+        or "mirror_control" in target_classes
+    ):
+        reasons.append("endpoint has bias or mirror-control semantic evidence")
+        return "bias_path", 0.82, reasons
+    if "tail" in all_classes:
+        reasons.append("path traverses a tail-current-source net")
+        return "bias_path", 0.76, reasons
+    if device_nodes:
+        reasons.append("path crosses active or passive devices")
+        return "structural_path", 0.55, reasons
+    reasons.append("no semantic evidence beyond connectivity")
+    return "unknown", 0.2, reasons
+
+
+def _class_names(classes: list[dict]) -> set[str]:
+    return {item["class"] for item in classes}
+
+
+def _is_feedback_candidate(source: str, target: str) -> bool:
+    joined = f"{source} {target}".lower()
+    return "fb" in joined or "feedback" in joined
 
 
 def _looks_like_bias_gate(net: str) -> bool:
