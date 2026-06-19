@@ -8,6 +8,16 @@ from xml.sax.saxutils import escape
 import click
 
 from .benchmark import run_benchmark
+from .ir import (
+    annotation_coverage as ir_annotation_coverage,
+    check_annotations as ir_check_annotations,
+    circuit_from_ir,
+    export_ir as export_persistent_ir,
+    is_ir_file,
+    read_ir,
+    validate_ir as ir_validate_ir,
+    write_ir,
+)
 from .structural import (
     COMMON_NETS,
     annotate_circuit,
@@ -41,7 +51,7 @@ def annotate(
     output_format: str,
 ) -> None:
     """Annotate devices and nets with structural semantic labels."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     annotation = annotate_circuit(circuit)
     if output_format == "json":
         click.echo(dumps_json(annotation))
@@ -83,7 +93,7 @@ def benchmark(tasks: Path, output_format: str) -> None:
 @click.option("--max-patterns", default=20, show_default=True, help="Maximum semantic matches.")
 def brief(netlist: Path, topcell: str | None, expand_depth: int, max_patterns: int) -> None:
     """Emit a compact LLM-readable circuit brief."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     for line in _brief_lines(circuit, max_patterns=max_patterns):
         click.echo(line)
 
@@ -93,7 +103,7 @@ def brief(netlist: Path, topcell: str | None, expand_depth: int, max_patterns: i
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
 def list_subckts(netlist: Path, output_format: str) -> None:
     """List subcircuit definitions and direct device counts."""
-    subckts = list_subcircuits(netlist)
+    subckts = _load_subcircuits(netlist)
     if output_format == "json":
         click.echo(dumps_json({"subcircuits": subckts}))
         return
@@ -114,7 +124,7 @@ def summarize(
     output_format: str,
 ) -> None:
     """Summarize a netlist at a high level."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     summary = circuit.summary()
     if output_format == "json":
         click.echo(dumps_json(circuit.to_json_dict()))
@@ -158,7 +168,7 @@ def neighborhood(
     output_format: str,
 ) -> None:
     """Inspect the neighborhood around a net."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     result = structural_neighborhood(
         circuit,
         net_name,
@@ -200,7 +210,7 @@ def explain_net(
     output_format: str,
 ) -> None:
     """Explain the likely semantic role of a net."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     result = structural_explain_net(circuit, net_name)
     if output_format == "json":
         click.echo(dumps_json(result))
@@ -243,7 +253,7 @@ def path(
     output_format: str,
 ) -> None:
     """Find likely connectivity paths between two nets."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     result = net_path(
         circuit,
         source,
@@ -282,7 +292,7 @@ def classify_path(
     output_format: str,
 ) -> None:
     """Find and classify a likely analog path between two nets."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     result = structural_classify_path(
         circuit,
         source,
@@ -318,7 +328,7 @@ def detect(
     output_format: str,
 ) -> None:
     """Detect analog semantic patterns."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     try:
         hits = detect_semantics(circuit, pattern)
     except ValueError as exc:
@@ -352,7 +362,7 @@ def explain(
     output_format: str,
 ) -> None:
     """Explain the likely role of a device."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     result = explain_device(circuit, device)
     if output_format == "json":
         click.echo(dumps_json(result))
@@ -386,12 +396,97 @@ def export_graph(
     output_format: str,
 ) -> None:
     """Export the device-net graph for downstream workflows."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    ir = read_ir(netlist) if is_ir_file(netlist) else None
+    circuit = _load_circuit(netlist, topcell=topcell, expand_depth=expand_depth)
     graph = structural_export_graph(circuit, include_semantics=not no_semantics)
+    if ir is not None and not no_semantics:
+        graph["annotations"] = ir.get("annotations", [])
     if output_format == "graphml":
         click.echo(_graph_to_graphml(graph))
         return
     click.echo(dumps_json(graph))
+
+
+@main.command("export-ir")
+@click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
+@click.option("--no-rule-annotations", is_flag=True, help="Do not seed candidate rule annotations.")
+@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), help="Output .nlc.json path.")
+def export_ir(
+    netlist: Path,
+    topcell: str | None,
+    expand_depth: int,
+    no_rule_annotations: bool,
+    output: Path | None,
+) -> None:
+    """Export a persistent workflow IR document."""
+    if is_ir_file(netlist):
+        ir = read_ir(netlist)
+    else:
+        ir = export_persistent_ir(
+            netlist,
+            topcell=topcell,
+            expand_depth=expand_depth,
+            include_rule_annotations=not no_rule_annotations,
+        )
+    if output is not None:
+        write_ir(ir, output)
+        click.echo(f"wrote {output}")
+        return
+    click.echo(dumps_json(ir))
+
+
+@main.command("validate-ir")
+@click.argument("ir_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def validate_ir(ir_path: Path, output_format: str) -> None:
+    """Validate persistent IR fact-layer references."""
+    result = ir_validate_ir(read_ir(ir_path))
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        if not result["valid"]:
+            raise SystemExit(1)
+        return
+    _echo_check_result("IR validation", result["valid"], result["errors"], result["warnings"])
+    if not result["valid"]:
+        raise SystemExit(1)
+
+
+@main.command("annotation-coverage")
+@click.argument("ir_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def annotation_coverage(ir_path: Path, output_format: str) -> None:
+    """Report net/device annotation coverage."""
+    result = ir_annotation_coverage(read_ir(ir_path))
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        if not result["complete"]:
+            raise SystemExit(1)
+        return
+    click.echo(f"Annotation coverage: {'complete' if result['complete'] else 'incomplete'}")
+    click.echo(_coverage_line("Devices", result["devices"]))
+    click.echo(_coverage_line("Nets", result["nets"]))
+    if not result["complete"]:
+        raise SystemExit(1)
+
+
+@main.command("check-annotations")
+@click.argument("ir_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def check_annotations(ir_path: Path, output_format: str) -> None:
+    """Check annotation references, coverage, conflicts, and structural consistency."""
+    result = ir_check_annotations(read_ir(ir_path))
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        if not result["ok"]:
+            raise SystemExit(1)
+        return
+    _echo_check_result("Annotation check", result["ok"], result["errors"], result["warnings"])
+    click.echo(_coverage_line("Devices", result["coverage"]["devices"]))
+    click.echo(_coverage_line("Nets", result["coverage"]["nets"]))
+    if not result["ok"]:
+        raise SystemExit(1)
 
 
 @main.command(
@@ -435,6 +530,20 @@ def _exclude_nets(exclude_common_nets: bool, exclude_net: tuple[str, ...]) -> se
     if exclude_common_nets:
         excluded.update(COMMON_NETS)
     return excluded
+
+
+def _load_circuit(path: Path, *, topcell: str | None, expand_depth: int) -> object:
+    if is_ir_file(path):
+        if topcell or expand_depth:
+            raise click.ClickException("--topcell/--expand-depth are not supported for IR input")
+        return circuit_from_ir(read_ir(path))
+    return parse_structural_netlist(path, topcell=topcell, expand_depth=expand_depth)
+
+
+def _load_subcircuits(path: Path) -> list[dict]:
+    if is_ir_file(path):
+        return read_ir(path).get("symbols", {}).get("subcircuits", [])
+    return list_subcircuits(path)
 
 
 def _brief_lines(circuit, *, max_patterns: int) -> list[str]:
@@ -533,6 +642,20 @@ def _graph_to_graphml(graph: dict) -> str:
         "</graphml>",
     ])
     return "\n".join(lines)
+
+
+def _echo_check_result(title: str, ok: bool, errors: list[dict], warnings: list[dict]) -> None:
+    click.echo(f"{title}: {'ok' if ok else 'failed'}")
+    for error in errors:
+        click.echo(f"ERROR [{error['kind']}]: {error['message']}")
+    for warning in warnings:
+        click.echo(f"WARNING [{warning['kind']}]: {warning['message']}")
+
+
+def _coverage_line(label: str, item: dict) -> str:
+    missing = item.get("missing", [])
+    suffix = "complete" if not missing else f"missing {len(missing)}"
+    return f"{label}: {item['covered']}/{item['total']} covered ({suffix})"
 
 
 if __name__ == "__main__":

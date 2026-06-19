@@ -32,6 +32,7 @@ At a glance:
 | Capability | Commands |
 |---|---|
 | LLM-readable circuit context | `brief`, `annotate` |
+| Persistent workflow IR | `export-ir`, `validate-ir`, `annotation-coverage`, `check-annotations` |
 | Structural discovery | `list-subckts`, `summarize` |
 | Graph queries | `neighborhood`, `path`, `export-graph` |
 | Analog semantics | `detect`, `explain`, `explain-net`, `classify-path` |
@@ -66,6 +67,7 @@ separate project.
 netlist-crawler annotate examples/simple_diff_pair.sp --format json
 netlist-crawler brief examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1
 netlist-crawler benchmark benchmarks/seed_tasks.json
+netlist-crawler export-ir examples/simple_diff_pair.sp -o design.nlc.json
 netlist-crawler list-subckts examples/hierarchical_ota.sp --format json
 netlist-crawler list-subckts examples/include_top.sp --format json
 netlist-crawler summarize examples/simple_diff_pair.sp
@@ -106,6 +108,29 @@ GraphML for downstream agent workflows and visualization.
 `benchmark` runs JSON task files that assert expected structural and semantic
 behavior. The seed task file is intentionally small; it is the starting point
 for a larger tool-assisted analog-understanding evaluation set.
+
+## Persistent IR and Annotations
+
+Workflow programs should use `netlist-crawler.ir.v1` as the shared persistent
+format. The IR keeps parsed instances, nets, edges, raw source lines,
+directives, parameters, subcircuit metadata, and annotations in one JSON
+document. The fact layer is separate from semantic overlays: Crawler rule
+outputs are stored as candidate annotations with explicit source, confidence,
+and evidence, and downstream workflow agents can append their own annotations
+without mutating the original netlist facts.
+
+Typical loop:
+
+```bash
+netlist-crawler export-ir examples/simple_diff_pair.sp -o design.nlc.json
+```
+
+Then workflow code can append annotations and call `validate-ir`,
+`annotation-coverage`, and `check-annotations`. A node is considered handled
+when it has a semantic label or an explicit disposition such as
+`internal`, `unclassified_internal`, `parasitic_only`, or
+`unknown_needs_review`. This lets agents avoid renaming nets directly while the
+checker verifies coverage, references, conflicts, and basic graph consistency.
 
 The post-layout parasitic analysis engine is also available through:
 
