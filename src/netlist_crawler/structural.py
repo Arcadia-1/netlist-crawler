@@ -23,6 +23,12 @@ PIN_ROLES: dict[str, tuple[str, ...]] = {
 
 _INSTANCE_WITH_PARENS = re.compile(r"^(\S+)\s*\((.*?)\)\s*(.*)$")
 GLOBAL_NETS = {"0", "gnd", "GND", "vss", "VSS", "vdd", "VDD", "vss!", "vdd!"}
+COMMON_NETS = GLOBAL_NETS | {
+    "agnd", "AGND", "dgnd", "DGND",
+    "avdd", "AVDD", "dvdd", "DVDD",
+    "avss", "AVSS", "dvss", "DVSS",
+    "sub", "SUB", "bulk", "BULK",
+}
 
 
 @dataclass(frozen=True)
@@ -255,8 +261,15 @@ def _expand_subckt(
     return expanded
 
 
-def neighborhood(circuit: StructuralCircuit, net: str, depth: int) -> dict:
+def neighborhood(
+    circuit: StructuralCircuit,
+    net: str,
+    depth: int,
+    *,
+    exclude_nets: set[str] | None = None,
+) -> dict:
     """Return a bounded bipartite neighborhood around a net."""
+    exclude_nets = exclude_nets or set()
     start = f"#{net}"
     adj = circuit.adjacency()
     if start not in adj:
@@ -270,6 +283,8 @@ def neighborhood(circuit: StructuralCircuit, net: str, depth: int) -> dict:
         node, dist = q.popleft()
         if dist >= depth * 2:
             continue
+        if node != start and _is_excluded_net_node(node, exclude_nets):
+            continue
         for nb in sorted(adj.get(node, ())):
             if nb in seen:
                 continue
@@ -278,7 +293,8 @@ def neighborhood(circuit: StructuralCircuit, net: str, depth: int) -> dict:
                 device_names.add(nb[1:])
             elif nb.startswith("#"):
                 net_names.add(nb[1:])
-            q.append((nb, dist + 1))
+            if not _is_excluded_net_node(nb, exclude_nets):
+                q.append((nb, dist + 1))
 
     devices = circuit.device_by_name()
     return {
@@ -298,8 +314,15 @@ def neighborhood(circuit: StructuralCircuit, net: str, depth: int) -> dict:
     }
 
 
-def net_path(circuit: StructuralCircuit, source: str, target: str) -> dict:
+def net_path(
+    circuit: StructuralCircuit,
+    source: str,
+    target: str,
+    *,
+    exclude_nets: set[str] | None = None,
+) -> dict:
     """Find the shortest structural path between two nets."""
+    exclude_nets = exclude_nets or set()
     start = f"#{source}"
     goal = f"#{target}"
     adj = circuit.adjacency()
@@ -319,6 +342,8 @@ def net_path(circuit: StructuralCircuit, source: str, target: str) -> dict:
             break
         for nb in sorted(adj.get(node, ())):
             if nb in parent:
+                continue
+            if nb not in {start, goal} and _is_excluded_net_node(nb, exclude_nets):
                 continue
             parent[nb] = node
             q.append(nb)
@@ -695,6 +720,10 @@ def _display_node(node: str) -> str:
     if node.startswith("@"):
         return node[1:]
     return node
+
+
+def _is_excluded_net_node(node: str, exclude_nets: set[str]) -> bool:
+    return node.startswith("#") and node[1:] in exclude_nets
 
 
 def _subckt_header(line: str) -> tuple[str, list[str]] | None:

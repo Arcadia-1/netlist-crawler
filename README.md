@@ -38,6 +38,7 @@ netlist-crawler summarize examples/two_subckts.sp --topcell bias_block --format 
 netlist-crawler summarize examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
 netlist-crawler neighborhood examples/simple_diff_pair.sp --net vout --depth 2
 netlist-crawler path examples/simple_diff_pair.sp --from vinp --to vout
+netlist-crawler path examples/rail_bridge.sp --topcell rail_bridge --from a --to b --exclude-common-nets
 netlist-crawler detect examples/simple_diff_pair.sp --pattern diff-pair
 netlist-crawler explain examples/simple_diff_pair.sp --device M1
 ```
@@ -46,9 +47,11 @@ netlist-crawler explain examples/simple_diff_pair.sp --device M1
 SPICE-like structural parser, support `--topcell` for subcircuit selection, and
 support `--expand-depth` for hierarchical instance expansion, including simple
 named-port X instances. All structural commands support `--format json` for
-agent use. The semantic detector and device explanation commands include
-first-pass rules for differential pairs, current mirrors, tail current sources,
-and active loads, with evidence and confidence fields in JSON output.
+agent use. Path and neighborhood traversal can exclude common rails or explicit
+project nets with `--exclude-common-nets` and `--exclude-net`. The semantic
+detector and device explanation commands include first-pass rules for
+differential pairs, current mirrors, tail current sources, and active loads,
+with evidence and confidence fields in JSON output.
 
 The post-layout parasitic analysis engine is also available through:
 

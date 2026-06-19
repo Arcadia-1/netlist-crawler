@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from .structural import (
+    COMMON_NETS,
     detect_semantics,
     dumps_json,
     explain_device,
@@ -76,6 +77,8 @@ def summarize(
 @click.option("--depth", default=1, show_default=True, help="Traversal depth.")
 @click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
 @click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
+@click.option("--exclude-common-nets", is_flag=True, help="Do not traverse common rails.")
+@click.option("--exclude-net", multiple=True, help="Net to keep visible but not traverse.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
 def neighborhood(
     netlist: Path,
@@ -83,11 +86,18 @@ def neighborhood(
     depth: int,
     topcell: str | None,
     expand_depth: int,
+    exclude_common_nets: bool,
+    exclude_net: tuple[str, ...],
     output_format: str,
 ) -> None:
     """Inspect the neighborhood around a net."""
     circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
-    result = structural_neighborhood(circuit, net_name, depth)
+    result = structural_neighborhood(
+        circuit,
+        net_name,
+        depth,
+        exclude_nets=_exclude_nets(exclude_common_nets, exclude_net),
+    )
     if output_format == "json":
         click.echo(dumps_json(result))
         return
@@ -114,6 +124,8 @@ def neighborhood(
 @click.option("--to", "target", required=True, help="Target net.")
 @click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
 @click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
+@click.option("--exclude-common-nets", is_flag=True, help="Do not traverse common rails.")
+@click.option("--exclude-net", multiple=True, help="Net to exclude from traversal.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
 def path(
     netlist: Path,
@@ -121,11 +133,18 @@ def path(
     target: str,
     topcell: str | None,
     expand_depth: int,
+    exclude_common_nets: bool,
+    exclude_net: tuple[str, ...],
     output_format: str,
 ) -> None:
     """Find likely connectivity paths between two nets."""
     circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
-    result = net_path(circuit, source, target)
+    result = net_path(
+        circuit,
+        source,
+        target,
+        exclude_nets=_exclude_nets(exclude_common_nets, exclude_net),
+    )
     if output_format == "json":
         click.echo(dumps_json(result))
         return
@@ -237,6 +256,13 @@ def inject(args: tuple[str, ...]) -> None:
     from netlist_crawler.parasitics.inject import main as inject_main
 
     raise SystemExit(inject_main(list(args)))
+
+
+def _exclude_nets(exclude_common_nets: bool, exclude_net: tuple[str, ...]) -> set[str]:
+    excluded = set(exclude_net)
+    if exclude_common_nets:
+        excluded.update(COMMON_NETS)
+    return excluded
 
 
 if __name__ == "__main__":

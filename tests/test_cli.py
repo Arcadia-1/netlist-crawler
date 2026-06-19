@@ -198,6 +198,48 @@ def test_path_finds_structural_route_between_nets() -> None:
     assert payload["path"] == ["vinp", "M1", "voutp"]
 
 
+def test_path_can_exclude_common_rail_traversal() -> None:
+    without_filter = CliRunner().invoke(
+        main,
+        [
+            "path",
+            "examples/rail_bridge.sp",
+            "--topcell",
+            "rail_bridge",
+            "--from",
+            "a",
+            "--to",
+            "b",
+            "--format",
+            "json",
+        ],
+    )
+    assert without_filter.exit_code == 0
+    assert json.loads(without_filter.output)["found"] is True
+
+    with_filter = CliRunner().invoke(
+        main,
+        [
+            "path",
+            "examples/rail_bridge.sp",
+            "--topcell",
+            "rail_bridge",
+            "--from",
+            "a",
+            "--to",
+            "b",
+            "--exclude-common-nets",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert with_filter.exit_code == 0
+    payload = json.loads(with_filter.output)
+    assert payload["found"] is False
+    assert payload["reason"] == "disconnected"
+
+
 def test_detect_reports_initial_semantic_patterns() -> None:
     result = CliRunner().invoke(
         main,
