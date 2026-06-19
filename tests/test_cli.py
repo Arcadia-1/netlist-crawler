@@ -775,6 +775,50 @@ def test_spectre_non_x_prefix_instances_use_subckt_port_mapping(tmp_path) -> Non
     assert expanded_devices["I0.R0"]["pins"] == {"1": "I0.DO50", "2": "I0.DI33"}
 
 
+def test_no_port_parenthesized_subckt_expansion_maps_actual_nets(tmp_path) -> None:
+    netlist = tmp_path / "no_port_parenthesized.spice"
+    netlist.write_text(
+        """
+        subckt CHILD
+        M1 (d g s b) nch w=(1u) l=(1u)
+        ends CHILD
+
+        subckt TOP
+        X1 (out in vss vss) CHILD
+        ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            str(netlist),
+            "--topcell",
+            "TOP",
+            "--expand-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    devices = {device["name"]: device for device in payload["devices"]}
+    assert devices["X1.M1"]["pins"] == {
+        "D": "out",
+        "G": "in",
+        "S": "vss",
+        "B": "vss",
+    }
+    assert set(payload["nets"]) == {"out", "in", "vss"}
+    assert not any(net.startswith("X1.") for net in payload["nets"])
+
+
+
 def test_x_prefixed_pex_primitives_are_not_subckt_instances(tmp_path) -> None:
     netlist = tmp_path / "pex_primitives.sp"
     netlist.write_text(

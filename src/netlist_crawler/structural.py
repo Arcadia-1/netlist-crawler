@@ -1265,12 +1265,23 @@ def _instance_port_map(
     prefix: str,
 ) -> dict[str, str]:
     mapped: dict[str, str] = {}
-    for idx, port in enumerate(definition.ports, start=1):
+    ports = definition.ports or _infer_no_port_interface(definition, instance)
+    for idx, port in enumerate(ports, start=1):
         actual = _get_instance_pin(instance, port, str(idx))
         if actual is None:
             continue
         mapped[port] = _map_net(actual, prefix=prefix, net_map=net_map)
     return mapped
+
+
+def _infer_no_port_interface(definition: SubcktDef, instance: Device) -> list[str]:
+    if not instance.pins or not definition.devices:
+        return []
+    first_device = definition.devices[0]
+    candidates = list(first_device.pins.values())
+    if len(candidates) < len(instance.pins):
+        return []
+    return candidates[:len(instance.pins)]
 
 
 def _get_instance_pin(instance: Device, port: str, positional_key: str) -> str | None:
