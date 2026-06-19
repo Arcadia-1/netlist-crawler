@@ -348,10 +348,11 @@ def detect_semantics(circuit: StructuralCircuit, pattern: str = "all") -> list[d
         "differential-pair": _detect_diff_pairs,
         "current-mirror": _detect_current_mirrors,
         "tail-source": _detect_tail_sources,
+        "active-load": _detect_active_loads,
     }
     if wanted == "all":
         out: list[dict] = []
-        for name in ("diff-pair", "current-mirror", "tail-source"):
+        for name in ("diff-pair", "current-mirror", "tail-source", "active-load"):
             out.extend(detectors[name](circuit))
         return out
     if wanted not in detectors:
@@ -484,6 +485,35 @@ def _detect_tail_sources(circuit: StructuralCircuit) -> list[dict]:
                     "bulk_net": bulk,
                 },
                 "confidence": round(min(confidence, 0.93), 2),
+            })
+    return hits
+
+
+def _detect_active_loads(circuit: StructuralCircuit) -> list[dict]:
+    hits = []
+    devices = circuit.device_by_name()
+    for diff_pair in _detect_diff_pairs(circuit):
+        drain_nets = set(diff_pair["evidence"]["drain_nets"])
+        for mirror in _detect_current_mirrors(circuit):
+            mirror_devices = [devices[name] for name in mirror["devices"]]
+            loaded = [
+                device.name
+                for device in mirror_devices
+                if device.pins.get("D") in drain_nets
+            ]
+            if len(loaded) < 2:
+                continue
+            hits.append({
+                "pattern": "active_load",
+                "devices": mirror["devices"],
+                "evidence": {
+                    "loaded_diff_pair": diff_pair["devices"],
+                    "loaded_drain_nets": sorted(drain_nets),
+                    "mirror_shared_gate": mirror["evidence"]["shared_gate"],
+                    "mirror_shared_source": mirror["evidence"]["shared_source"],
+                    "devices_loading_diff_pair_outputs": loaded,
+                },
+                "confidence": 0.84,
             })
     return hits
 

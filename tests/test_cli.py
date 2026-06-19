@@ -210,6 +210,7 @@ def test_detect_reports_initial_semantic_patterns() -> None:
     assert "differential_pair" in patterns
     assert "current_mirror" in patterns
     assert "tail_current_source" in patterns
+    assert "active_load" in patterns
 
     diff_pair = next(
         match for match in payload["matches"]
@@ -236,3 +237,21 @@ def test_explain_reports_device_roles() -> None:
     payload = json.loads(result.output)
     assert payload["found"] is True
     assert any(role["pattern"] == "tail_current_source" for role in payload["roles"])
+
+
+def test_explain_reports_active_load_role() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "explain",
+            "examples/simple_diff_pair.sp",
+            "--device",
+            "M4",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert any(role["pattern"] == "active_load" for role in payload["roles"])

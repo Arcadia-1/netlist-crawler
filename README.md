@@ -47,8 +47,8 @@ SPICE-like structural parser, support `--topcell` for subcircuit selection, and
 support `--expand-depth` for hierarchical instance expansion, including simple
 named-port X instances. All structural commands support `--format json` for
 agent use. The semantic detector and device explanation commands include
-first-pass rules for differential pairs, current mirrors, and tail current
-sources, with evidence and confidence fields in JSON output.
+first-pass rules for differential pairs, current mirrors, tail current sources,
+and active loads, with evidence and confidence fields in JSON output.
 
 The post-layout parasitic analysis engine is also available through:
 
