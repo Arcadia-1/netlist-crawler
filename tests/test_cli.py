@@ -715,6 +715,36 @@ def test_dollar_pins_x_instances_use_named_port_mapping(tmp_path) -> None:
     assert "ND2D1A" not in payload["nets"]
 
 
+def test_include_directive_directory_target_does_not_crash(tmp_path) -> None:
+    netlist = tmp_path / "directives.sp"
+    netlist.write_text(
+        """
+        .PARAM VDD=5.0
+        .INCLUDE / PDK/sky130/models/sky130.lib.sp
+        .INCLUDE /missing/pdk/models/rs.scs
+        .LIB /missing/pdk/models/sky130.lib.inc TT
+        .SUBCKT amp VDD VSS IN OUT
+        M1 OUT IN VDD VDD pch W=2u L=0.5u
+        .ENDS amp
+        XAMP1 VDD VSS VIN VOUT amp
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["list-subckts", str(netlist), "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["subcircuits"] == [
+        {"name": "amp", "ports": ["VDD", "VSS", "IN", "OUT"], "params": {}, "devices": 1}
+    ]
+
+
+
 def test_spectre_non_x_prefix_instances_use_subckt_port_mapping(tmp_path) -> None:
     netlist = tmp_path / "spectre_i_instances.scs"
     netlist.write_text(

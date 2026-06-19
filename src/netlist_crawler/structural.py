@@ -1038,13 +1038,13 @@ def _logical_lines(path: Path, *, seen: set[Path] | None = None) -> Iterable[str
         if current:
             yield current
             include = _include_path(current, base_dir=path.parent)
-            if include and include.exists():
+            if include and include.is_file():
                 yield from _logical_lines(include, seen=seen)
         current = line
     if current:
         yield current
         include = _include_path(current, base_dir=path.parent)
-        if include and include.exists():
+        if include and include.is_file():
             yield from _logical_lines(include, seen=seen)
 
 
