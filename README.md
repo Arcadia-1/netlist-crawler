@@ -33,6 +33,7 @@ separate project.
 
 ```bash
 netlist-crawler brief examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1
+netlist-crawler benchmark benchmarks/seed_tasks.json
 netlist-crawler list-subckts examples/hierarchical_ota.sp --format json
 netlist-crawler list-subckts examples/include_top.sp --format json
 netlist-crawler summarize examples/simple_diff_pair.sp
@@ -58,6 +59,10 @@ detector and device explanation commands include first-pass rules for
 differential pairs, current mirrors, tail current sources, and active loads,
 with evidence and confidence fields in JSON output.
 
+`benchmark` runs JSON task files that assert expected structural and semantic
+behavior. The seed task file is intentionally small; it is the starting point
+for a larger tool-assisted analog-understanding evaluation set.
+
 The post-layout parasitic analysis engine is also available through:
 
 ```bash
@@ -70,8 +75,8 @@ netlist-crawler inject --help
 
 1. Harden semantic detectors beyond the first-pass rules: cascodes, active
    loads, bias trees, feedback paths, and project-specific exceptions.
-2. Build evaluation tasks comparing LLM-only, raw-netlist, graph-tool, and
-   semantic-tool workflows.
+2. Expand the benchmark into LLM-only, raw-netlist, graph-tool, and
+   semantic-tool comparisons.
 3. Expand Spectre/SPICE syntax coverage around parameters, library sections,
    and project-specific net aliases.
 

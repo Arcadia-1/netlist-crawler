@@ -1,0 +1,41 @@
+[
+  {
+    "name": "simple-diff-pair",
+    "kind": "detect_pattern",
+    "netlist": "../examples/simple_diff_pair.sp",
+    "pattern": "diff-pair",
+    "expected_pattern": "differential_pair",
+    "expected_devices": ["M1", "M2"]
+  },
+  {
+    "name": "hierarchical-active-load",
+    "kind": "detect_pattern",
+    "netlist": "../examples/hierarchical_ota.sp",
+    "topcell": "ota_top",
+    "expand_depth": 1,
+    "pattern": "active-load",
+    "expected_pattern": "active_load",
+    "expected_devices": ["XLOAD.M4", "XLOAD.M5"]
+  },
+  {
+    "name": "include-expansion-count",
+    "kind": "summary_count",
+    "netlist": "../examples/include_top.sp",
+    "topcell": "include_top",
+    "expand_depth": 1,
+    "expected": {
+      "devices": 3,
+      "nets": 7
+    }
+  },
+  {
+    "name": "rail-excluded-path",
+    "kind": "path",
+    "netlist": "../examples/rail_bridge.sp",
+    "topcell": "rail_bridge",
+    "from": "a",
+    "to": "b",
+    "exclude_nets": ["vdd", "VDD"],
+    "expected_found": false
+  }
+]

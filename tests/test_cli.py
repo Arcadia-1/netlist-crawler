@@ -43,6 +43,19 @@ def test_brief_reports_hierarchy_expansion() -> None:
     assert "differential_pair: XCORE.M1, XCORE.M2" in result.output
 
 
+def test_benchmark_seed_tasks_pass() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["benchmark", "benchmarks/seed_tasks.json", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["total"] == 4
+    assert payload["passed"] == 4
+    assert payload["failed"] == 0
+
+
 def test_summarize_json_on_simple_diff_pair() -> None:
     result = CliRunner().invoke(
         main,

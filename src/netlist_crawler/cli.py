@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from .benchmark import run_benchmark
 from .structural import (
     COMMON_NETS,
     detect_semantics,
@@ -21,6 +22,26 @@ from .structural import (
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def main() -> None:
     """Semantic static analysis for LLM-assisted analog circuit understanding."""
+
+
+@main.command()
+@click.argument("tasks", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def benchmark(tasks: Path, output_format: str) -> None:
+    """Run a structural/semantic benchmark task file."""
+    result = run_benchmark(tasks)
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        return
+    click.echo(
+        f"Benchmark: {result['passed']}/{result['total']} passed "
+        f"({result['failed']} failed)"
+    )
+    for item in result["results"]:
+        status = "PASS" if item["passed"] else "FAIL"
+        click.echo(f"{status} {item['name']} [{item['kind']}]")
+        if item.get("error"):
+            click.echo(f"  error: {item['error']}")
 
 
 @main.command()
