@@ -384,10 +384,11 @@ def detect_semantics(circuit: StructuralCircuit, pattern: str = "all") -> list[d
         "current-mirror": _detect_current_mirrors,
         "tail-source": _detect_tail_sources,
         "active-load": _detect_active_loads,
+        "cascode": _detect_cascodes,
     }
     if wanted == "all":
         out: list[dict] = []
-        for name in ("diff-pair", "current-mirror", "tail-source", "active-load"):
+        for name in ("diff-pair", "current-mirror", "tail-source", "active-load", "cascode"):
             out.extend(detectors[name](circuit))
         return out
     if wanted not in detectors:
@@ -551,6 +552,49 @@ def _detect_active_loads(circuit: StructuralCircuit) -> list[dict]:
                 "confidence": 0.84,
             })
     return hits
+
+
+def _detect_cascodes(circuit: StructuralCircuit) -> list[dict]:
+    hits = []
+    mos = _mos_devices(circuit)
+    for lower in mos:
+        for upper in mos:
+            if lower.name == upper.name:
+                continue
+            if lower.model != upper.model:
+                continue
+            intermediate = lower.pins.get("D")
+            if not intermediate or intermediate != upper.pins.get("S"):
+                continue
+            if lower.pins.get("G") == upper.pins.get("G"):
+                continue
+            if intermediate in GLOBAL_NETS:
+                continue
+            upper_gate = upper.pins.get("G", "")
+            if not _looks_like_bias_gate(upper_gate):
+                continue
+            confidence = 0.78
+            confidence += 0.08
+            hits.append({
+                "pattern": "cascode",
+                "devices": [lower.name, upper.name],
+                "evidence": {
+                    "lower_device": lower.name,
+                    "upper_device": upper.name,
+                    "intermediate_net": intermediate,
+                    "lower_gate": lower.pins.get("G"),
+                    "upper_gate": upper.pins.get("G"),
+                    "output_net": upper.pins.get("D"),
+                    "shared_model": lower.model,
+                },
+                "confidence": round(min(confidence, 0.9), 2),
+            })
+    return hits
+
+
+def _looks_like_bias_gate(net: str) -> bool:
+    n = net.lower()
+    return "bias" in n or n.startswith(("vb", "vcas", "vbn", "vbp"))
 
 
 def _logical_lines(path: Path, *, seen: set[Path] | None = None) -> Iterable[str]:

@@ -45,6 +45,7 @@ netlist-crawler neighborhood examples/rail_bridge.sp --topcell rail_bridge --net
 netlist-crawler path examples/simple_diff_pair.sp --from vinp --to vout
 netlist-crawler path examples/rail_bridge.sp --topcell rail_bridge --from a --to b --exclude-common-nets
 netlist-crawler detect examples/simple_diff_pair.sp --pattern diff-pair
+netlist-crawler detect examples/cascode_stage.sp --topcell cascode_stage --pattern cascode
 netlist-crawler explain examples/simple_diff_pair.sp --device M1
 ```
 
@@ -58,8 +59,8 @@ agent use. Path and neighborhood traversal can exclude common rails or explicit
 project nets with `--exclude-common-nets` and `--exclude-net`; `--max-degree`
 keeps very high-degree nets visible without letting them dominate traversal.
 The semantic detector and device explanation commands include first-pass rules
-for differential pairs, current mirrors, tail current sources, and active loads,
-with evidence and confidence fields in JSON output.
+for differential pairs, current mirrors, tail current sources, active loads, and
+cascodes, with evidence and confidence fields in JSON output.
 
 `benchmark` runs JSON task files that assert expected structural and semantic
 behavior. The seed task file is intentionally small; it is the starting point
@@ -75,8 +76,8 @@ netlist-crawler inject --help
 
 ## Roadmap
 
-1. Harden semantic detectors beyond the first-pass rules: cascodes, active
-   loads, bias trees, feedback paths, and project-specific exceptions.
+1. Harden semantic detectors beyond the first-pass rules: bias trees, feedback
+   paths, and project-specific exceptions.
 2. Expand the benchmark into LLM-only, raw-netlist, graph-tool, and
    semantic-tool comparisons.
 3. Expand Spectre/SPICE syntax coverage around parameters, library sections,

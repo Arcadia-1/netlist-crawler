@@ -43,6 +43,17 @@ def test_brief_reports_hierarchy_expansion() -> None:
     assert "differential_pair: XCORE.M1, XCORE.M2" in result.output
 
 
+def test_brief_reports_cascode_pattern() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["brief", "examples/cascode_stage.sp", "--topcell", "cascode_stage"],
+    )
+
+    assert result.exit_code == 0
+    assert "cascode: M1, M2" in result.output
+    assert "intermediate_net=ncas" in result.output
+
+
 def test_benchmark_seed_tasks_pass() -> None:
     result = CliRunner().invoke(
         main,
@@ -425,3 +436,41 @@ def test_explain_reports_active_load_role() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert any(role["pattern"] == "active_load" for role in payload["roles"])
+
+
+def test_detect_and_explain_cascode_role() -> None:
+    detected = CliRunner().invoke(
+        main,
+        [
+            "detect",
+            "examples/cascode_stage.sp",
+            "--topcell",
+            "cascode_stage",
+            "--pattern",
+            "cascode",
+            "--format",
+            "json",
+        ],
+    )
+    assert detected.exit_code == 0
+    payload = json.loads(detected.output)
+    assert len(payload["matches"]) == 1
+    assert payload["matches"][0]["devices"] == ["M1", "M2"]
+    assert payload["matches"][0]["evidence"]["intermediate_net"] == "ncas"
+
+    explained = CliRunner().invoke(
+        main,
+        [
+            "explain",
+            "examples/cascode_stage.sp",
+            "--topcell",
+            "cascode_stage",
+            "--device",
+            "M2",
+            "--format",
+            "json",
+        ],
+    )
+    assert explained.exit_code == 0
+    roles = json.loads(explained.output)["roles"]
+    assert any(role["pattern"] == "cascode" for role in roles)
