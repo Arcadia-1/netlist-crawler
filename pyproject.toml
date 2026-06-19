@@ -22,6 +22,7 @@ parasitics = [
   "scipy>=1.10",
 ]
 test = [
+  "coverage[toml]>=7",
   "pytest>=7",
   "numpy>=1.24",
   "scipy>=1.10",
@@ -36,3 +37,11 @@ artifacts = ["src/netlist_crawler/py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["netlist_crawler"]
+
+[tool.coverage.report]
+fail_under = 50
+show_missing = true
+skip_covered = true
