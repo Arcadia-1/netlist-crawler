@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -543,7 +544,13 @@ def _detect_active_loads(circuit: StructuralCircuit) -> list[dict]:
     return hits
 
 
-def _logical_lines(path: Path) -> Iterable[str]:
+def _logical_lines(path: Path, *, seen: set[Path] | None = None) -> Iterable[str]:
+    seen = seen or set()
+    resolved = path.resolve()
+    if resolved in seen:
+        return
+    seen.add(resolved)
+
     current = ""
     for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
         line = raw.strip()
@@ -554,9 +561,15 @@ def _logical_lines(path: Path) -> Iterable[str]:
             continue
         if current:
             yield current
+            include = _include_path(current, base_dir=path.parent)
+            if include and include.exists():
+                yield from _logical_lines(include, seen=seen)
         current = line
     if current:
         yield current
+        include = _include_path(current, base_dir=path.parent)
+        if include and include.exists():
+            yield from _logical_lines(include, seen=seen)
 
 
 def _parse_device_line(line: str) -> Device | None:
@@ -724,6 +737,21 @@ def _display_node(node: str) -> str:
 
 def _is_excluded_net_node(node: str, exclude_nets: set[str]) -> bool:
     return node.startswith("#") and node[1:] in exclude_nets
+
+
+def _include_path(line: str, *, base_dir: Path) -> Path | None:
+    try:
+        tokens = shlex.split(line, comments=False, posix=True)
+    except ValueError:
+        return None
+    if len(tokens) < 2:
+        return None
+    if tokens[0].lower() not in {".include", "include", ".inc", "inc"}:
+        return None
+    target = Path(tokens[1])
+    if not target.is_absolute():
+        target = base_dir / target
+    return target
 
 
 def _subckt_header(line: str) -> tuple[str, list[str]] | None:

@@ -61,6 +61,18 @@ def test_list_subckts_reports_ports_and_counts() -> None:
     assert ota_top["devices"] == 2
 
 
+def test_list_subckts_follows_relative_includes() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["list-subckts", "examples/include_top.sp", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    names = {subckt["name"] for subckt in payload["subcircuits"]}
+    assert names == {"inc_diff", "include_top"}
+
+
 def test_topcell_selection_prevents_cross_subckt_paths() -> None:
     result = CliRunner().invoke(
         main,
@@ -153,6 +165,28 @@ def test_named_port_hierarchy_expands_by_formal_port_name() -> None:
     assert payload["summary"]["devices"] == 2
     assert payload["nets"]["a"] == ["XINV.M1.G", "XINV.M2.G"]
     assert payload["nets"]["y"] == ["XINV.M1.D", "XINV.M2.D"]
+
+
+def test_include_file_subckt_can_be_expanded() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            "examples/include_top.sp",
+            "--topcell",
+            "include_top",
+            "--expand-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["summary"]["devices"] == 3
+    assert payload["summary"]["subcircuits"] == ["inc_diff", "include_top"]
+    assert payload["nets"]["XCORE.tail"] == ["XCORE.M1.S", "XCORE.M2.S", "XCORE.M3.D"]
 
 
 def test_neighborhood_reports_adjacent_devices() -> None:
