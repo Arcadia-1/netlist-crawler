@@ -100,6 +100,28 @@ def test_annotation_check_commands_fail_on_incomplete_coverage(tmp_path: Path) -
     assert json.loads(checked.output)["ok"] is False
 
 
+def test_export_ir_disambiguates_duplicate_instance_names(tmp_path: Path) -> None:
+    netlist = tmp_path / "duplicate_names.sp"
+    netlist.write_text(
+        """
+        .SUBCKT duplicate_names A B C D
+        XA2 A B leaf
+        XA2 C D leaf
+        .ENDS duplicate_names
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    ir = nc.export_ir(netlist, topcell="duplicate_names")
+
+    ids = [item["id"] for item in ir["instances"]]
+    assert ids == ["duplicate_names.XA2#1", "duplicate_names.XA2#2"]
+    assert [item["name"] for item in ir["instances"]] == ["XA2", "XA2"]
+    assert {edge["device"] for edge in ir["edges"]} == set(ids)
+    assert nc.validate_ir(ir)["valid"] is True
+
+
 def test_validate_ir_rejects_bad_annotation_reference() -> None:
     ir = nc.export_ir(Path("examples/simple_diff_pair.sp"))
     ir["annotations"].append({

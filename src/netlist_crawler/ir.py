@@ -77,8 +77,9 @@ def export_ir(
     """Parse a netlist into the persistent workflow IR."""
     text = path.read_text(encoding="utf-8", errors="replace")
     circuit = parse_structural_netlist(path, topcell=topcell, expand_depth=expand_depth)
-    nets = circuit.nets()
-    annotations = _rule_annotations(circuit) if include_rule_annotations else []
+    device_ids = _unique_device_ids(circuit.devices)
+    nets = _nets_with_device_ids(circuit, device_ids)
+    annotations = _rule_annotations(circuit, device_ids=device_ids) if include_rule_annotations else []
     return {
         "schema": IR_SCHEMA,
         "source": {
@@ -102,7 +103,8 @@ def export_ir(
         },
         "instances": [
             {
-                "id": device.name,
+                "id": device_ids[index],
+                "name": device.name,
                 "kind": device.kind,
                 "scope": device.scope,
                 "model": device.model,
@@ -110,7 +112,7 @@ def export_ir(
                 "params": device.params,
                 "raw": device.raw,
             }
-            for device in circuit.devices
+            for index, device in enumerate(circuit.devices)
         ],
         "nets": [
             {
@@ -122,13 +124,13 @@ def export_ir(
         ],
         "edges": [
             {
-                "id": f"edge:{device.name}:{role}:{net}",
-                "device": device.name,
+                "id": f"edge:{device_ids[index]}:{role}:{net}",
+                "device": device_ids[index],
                 "net": net,
                 "role": role,
                 "type": "pin",
             }
-            for device in circuit.devices
+            for index, device in enumerate(circuit.devices)
             for role, net in device.pins.items()
         ],
         "annotations": annotations,
@@ -263,8 +265,43 @@ def check_annotations(ir: dict) -> dict:
     }
 
 
-def _rule_annotations(circuit: StructuralCircuit) -> list[dict]:
+def _unique_device_ids(devices: list[Device]) -> list[str]:
+    """Return stable unique IR ids while preserving raw instance names separately."""
+    total_counts: dict[str, int] = defaultdict(int)
+    for device in devices:
+        total_counts[device.name] += 1
+    seen: dict[str, int] = defaultdict(int)
+    ids: list[str] = []
+    used: set[str] = set()
+    for device in devices:
+        seen[device.name] += 1
+        if total_counts[device.name] == 1 and device.name not in used:
+            candidate = device.name
+        else:
+            scope = f"{device.scope}." if device.scope else ""
+            candidate = f"{scope}{device.name}#{seen[device.name]}"
+        while candidate in used:
+            candidate = f"{candidate}#"
+        used.add(candidate)
+        ids.append(candidate)
+    return ids
+
+
+def _nets_with_device_ids(circuit: StructuralCircuit, device_ids: list[str]) -> dict[str, list[str]]:
+    nets: dict[str, list[str]] = defaultdict(list)
+    for index, device in enumerate(circuit.devices):
+        device_id = device_ids[index]
+        for role, net in device.pins.items():
+            nets[net].append(f"{device_id}.{role}")
+    return dict(sorted(nets.items()))
+
+
+def _rule_annotations(circuit: StructuralCircuit, *, device_ids: list[str] | None = None) -> list[dict]:
     annotation = annotate_circuit(circuit)
+    raw_to_ids: dict[str, list[str]] = defaultdict(list)
+    if device_ids is not None:
+        for index, device in enumerate(circuit.devices):
+            raw_to_ids[device.name].append(device_ids[index])
     out: list[dict] = []
     counter = 0
     for net in annotation["nets"]:
@@ -284,8 +321,9 @@ def _rule_annotations(circuit: StructuralCircuit) -> list[dict]:
                 "type": "group",
                 "id": f"group:{match['pattern']}:{index}",
                 "members": [
-                    {"type": "device", "id": device}
+                    {"type": "device", "id": device_id}
                     for device in match.get("devices", [])
+                    for device_id in (raw_to_ids.get(device) or [device])
                 ],
             },
             label=match["pattern"],
