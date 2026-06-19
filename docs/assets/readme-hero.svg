@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Netlist Crawler</title>
+  <desc id="desc">Semantic static analysis for LLM-assisted analog circuit understanding.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="52%" stop-color="#102033"/>
+      <stop offset="100%" stop-color="#0c1f1f"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" x2="1">
+      <stop offset="0%" stop-color="#5eead4"/>
+      <stop offset="50%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#a7f3d0"/>
+    </linearGradient>
+    <filter id="soft-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#93a4b8" stroke-opacity="0.08" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="420" rx="28" fill="url(#bg)"/>
+  <rect width="1200" height="420" rx="28" fill="url(#grid)"/>
+  <path d="M30 330 C190 260 240 370 380 305 C520 240 610 285 720 235 C850 176 930 220 1170 110" fill="none" stroke="url(#accent)" stroke-opacity="0.18" stroke-width="80"/>
+
+  <g transform="translate(78 70)">
+    <rect x="0" y="0" width="500" height="280" rx="22" fill="#07111f" fill-opacity="0.72" stroke="#284357"/>
+    <text x="34" y="62" fill="#e6f6ff" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800" letter-spacing="0">Netlist Crawler</text>
+    <text x="36" y="102" fill="#a5c7d8" font-family="Arial, Helvetica, sans-serif" font-size="20" letter-spacing="0">Semantic static analysis for LLM-assisted</text>
+    <text x="36" y="130" fill="#a5c7d8" font-family="Arial, Helvetica, sans-serif" font-size="20" letter-spacing="0">analog circuit understanding.</text>
+
+    <g transform="translate(36 170)" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">
+      <rect x="0" y="0" width="118" height="34" rx="8" fill="#0f766e" fill-opacity="0.34" stroke="#5eead4" stroke-opacity="0.5"/>
+      <text x="18" y="22" fill="#d9fffa">SPICE</text>
+      <rect x="132" y="0" width="118" height="34" rx="8" fill="#0369a1" fill-opacity="0.34" stroke="#7dd3fc" stroke-opacity="0.5"/>
+      <text x="152" y="22" fill="#e0f6ff">Graph</text>
+      <rect x="264" y="0" width="138" height="34" rx="8" fill="#166534" fill-opacity="0.34" stroke="#86efac" stroke-opacity="0.5"/>
+      <text x="286" y="22" fill="#e8ffef">Semantics</text>
+    </g>
+
+    <text x="36" y="252" fill="#7da3b6" font-family="Courier, monospace" font-size="15">netlist-crawler brief opamp.sp --topcell OTA --expand-depth 2</text>
+  </g>
+
+  <g transform="translate(670 72)" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#6ee7f9" stroke-opacity="0.78" stroke-width="3" filter="url(#soft-glow)">
+      <path d="M90 65 H200"/>
+      <path d="M200 65 V140"/>
+      <path d="M200 65 L292 110"/>
+      <path d="M200 140 L292 110"/>
+      <path d="M292 110 H410"/>
+      <path d="M200 220 H292"/>
+      <path d="M292 220 V110"/>
+      <path d="M410 110 V220"/>
+      <path d="M292 220 H410"/>
+    </g>
+
+    <g font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700">
+      <circle cx="90" cy="65" r="26" fill="#0f172a" stroke="#5eead4" stroke-width="3"/>
+      <text x="76" y="70" fill="#d9fffa">VIN</text>
+      <circle cx="200" cy="65" r="28" fill="#0f172a" stroke="#38bdf8" stroke-width="3"/>
+      <text x="183" y="70" fill="#e0f6ff">M1</text>
+      <circle cx="200" cy="140" r="28" fill="#0f172a" stroke="#38bdf8" stroke-width="3"/>
+      <text x="182" y="145" fill="#e0f6ff">M2</text>
+      <circle cx="292" cy="110" r="30" fill="#0f172a" stroke="#86efac" stroke-width="3"/>
+      <text x="275" y="115" fill="#e8ffef">TAIL</text>
+      <circle cx="410" cy="110" r="29" fill="#0f172a" stroke="#a7f3d0" stroke-width="3"/>
+      <text x="392" y="115" fill="#ecfdf5">OUT</text>
+      <circle cx="292" cy="220" r="28" fill="#0f172a" stroke="#7dd3fc" stroke-width="3"/>
+      <text x="276" y="225" fill="#e0f6ff">M3</text>
+      <circle cx="410" cy="220" r="28" fill="#0f172a" stroke="#7dd3fc" stroke-width="3"/>
+      <text x="394" y="225" fill="#e0f6ff">M4</text>
+    </g>
+
+    <g transform="translate(44 285)" font-family="Arial, Helvetica, sans-serif" font-size="14">
+      <rect x="0" y="0" width="430" height="46" rx="12" fill="#07111f" fill-opacity="0.76" stroke="#29475d"/>
+      <text x="20" y="29" fill="#d8eef8">detect: differential_pair | current_mirror | active_load | cascode</text>
+    </g>
+  </g>
+</svg>

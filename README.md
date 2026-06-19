@@ -1,11 +1,42 @@
-# Netlist Crawler
+<p align="center">
+  <img src="docs/assets/readme-hero.svg" alt="Netlist Crawler: semantic static analysis for LLM-assisted analog circuit understanding" width="100%">
+</p>
 
-Semantic static analysis CLI for LLM-assisted analog circuit understanding.
+<p align="center">
+  <a href="https://github.com/Arcadia-1/netlist-crawler/actions/workflows/test.yml"><img alt="CI" src="https://github.com/Arcadia-1/netlist-crawler/actions/workflows/test.yml/badge.svg"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-0f766e">
+  <img alt="Status" src="https://img.shields.io/badge/status-alpha-f59e0b">
+  <img alt="CLI" src="https://img.shields.io/badge/CLI-netlist--crawler-38bdf8">
+  <img alt="Agent ready" src="https://img.shields.io/badge/agent--ready-JSON%20%7C%20brief-14b8a6">
+</p>
 
-Netlist Crawler turns SPICE/Spectre-style netlists into queryable graph and
-semantic summaries for AI agents. The goal is not to make an LLM re-implement
-graph algorithms on demand, but to provide stable tools for topology queries,
-hierarchy summaries, analog pattern detection, and concise JSON/text outputs.
+<p align="center">
+  <strong>Netlist Crawler turns SPICE/Spectre-style netlists into queryable graph evidence, analog semantic labels, and compact LLM-readable briefs.</strong>
+</p>
+
+<p align="center">
+  <a href="#cli-usage">CLI</a> ·
+  <a href="#project-scope">Scope</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#roadmap">Roadmap</a>
+</p>
+
+Netlist Crawler is the infrastructure layer for tool-assisted analog circuit
+understanding. It gives agents stable commands for topology queries, hierarchy
+summaries, semantic pattern detection, and JSON/text outputs instead of asking
+an LLM to reimplement graph algorithms on demand.
+
+At a glance:
+
+| Capability | Commands |
+|---|---|
+| LLM-readable circuit context | `brief`, `annotate` |
+| Structural discovery | `list-subckts`, `summarize` |
+| Graph queries | `neighborhood`, `path` |
+| Analog semantics | `detect`, `explain` |
+| Evaluation hooks | `benchmark` |
+| Post-layout parasitic analysis | `scan`, `prescribe`, `inject` |
 
 This repository starts from the existing `analog-netlist-crawl` implementation:
 validated post-layout netlist adapters, a canonical circuit IR, sparse
