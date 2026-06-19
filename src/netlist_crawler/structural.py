@@ -1051,6 +1051,9 @@ def _parse_device_line(line: str) -> Device | None:
     params = _parse_params(tokens[1:])
 
     if prefix == "X":
+        prefixed_primitive = _parse_x_prefixed_primitive(tokens, line)
+        if prefixed_primitive is not None:
+            return prefixed_primitive
         dollar_pins = _parse_dollar_pins_x_instance(tokens)
         if dollar_pins is not None:
             return dollar_pins
@@ -1097,6 +1100,30 @@ def _primitive_model(tokens: list[str], prefix: str, model_idx: int) -> str:
     if prefix in {"F", "H", "K"}:
         return ""
     return tokens[model_idx]
+
+
+def _parse_x_prefixed_primitive(tokens: list[str], line: str) -> Device | None:
+    name = tokens[0]
+    if len(name) < 3 or not name[2].isdigit():
+        return None
+    kind = name[1].upper()
+    if kind not in {"R", "C", "M"}:
+        return None
+    roles = PIN_ROLES[kind]
+    if len(tokens) < 1 + len(roles):
+        return None
+    nets = tokens[1:1 + len(roles)]
+    model_idx = 1 + len(roles)
+    model = _primitive_model(tokens, kind, model_idx)
+    return Device(
+        name=name,
+        kind=kind,
+        scope="",
+        model=model,
+        pins={role: net for role, net in zip(roles, nets)},
+        params=_parse_params(tokens[1:]),
+        raw=line,
+    )
 
 
 def _parse_dollar_pins_x_instance(tokens: list[str]) -> Device | None:

@@ -715,6 +715,40 @@ def test_dollar_pins_x_instances_use_named_port_mapping(tmp_path) -> None:
     assert "ND2D1A" not in payload["nets"]
 
 
+def test_x_prefixed_pex_primitives_are_not_subckt_instances(tmp_path) -> None:
+    netlist = tmp_path / "pex_primitives.sp"
+    netlist.write_text(
+        """
+        .subckt inv in out vss
+        XM1 out in vss vss nch w=1u l=0.1u
+        XR1 out mid 12
+        XC1 mid vss 4f
+        XU1 in out leafcell
+        .ends inv
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "inv", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    devices = {device["name"]: device for device in payload["devices"]}
+    assert payload["summary"]["device_kinds"] == {"C": 1, "M": 1, "R": 1, "X": 1}
+    assert devices["XM1"]["kind"] == "M"
+    assert devices["XM1"]["model"] == "nch"
+    assert devices["XM1"]["pins"] == {"D": "out", "G": "in", "S": "vss", "B": "vss"}
+    assert devices["XR1"]["kind"] == "R"
+    assert devices["XR1"]["pins"] == {"1": "out", "2": "mid"}
+    assert devices["XC1"]["kind"] == "C"
+    assert devices["XU1"]["kind"] == "X"
+    assert devices["XU1"]["model"] == "leafcell"
+
+
 def test_export_graph_graphml_smoke() -> None:
     result = CliRunner().invoke(
         main,
