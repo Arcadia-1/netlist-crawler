@@ -32,6 +32,7 @@ separate project.
 ## CLI Usage
 
 ```bash
+netlist-crawler list-subckts examples/hierarchical_ota.sp --format json
 netlist-crawler summarize examples/simple_diff_pair.sp
 netlist-crawler summarize examples/two_subckts.sp --topcell bias_block --format json
 netlist-crawler summarize examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
@@ -43,11 +44,11 @@ netlist-crawler explain examples/simple_diff_pair.sp --device M1
 
 `summarize`, `neighborhood`, and `path` currently operate on a lightweight
 SPICE-like structural parser, support `--topcell` for subcircuit selection, and
-support `--expand-depth` for hierarchical instance expansion. All structural
-commands support `--format json` for agent use. The semantic detector and device
-explanation commands include first-pass rules for differential pairs, current
-mirrors, and tail current sources, with evidence and confidence fields in JSON
-output.
+support `--expand-depth` for hierarchical instance expansion, including simple
+named-port X instances. All structural commands support `--format json` for
+agent use. The semantic detector and device explanation commands include
+first-pass rules for differential pairs, current mirrors, and tail current
+sources, with evidence and confidence fields in JSON output.
 
 The post-layout parasitic analysis engine is also available through:
 

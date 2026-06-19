@@ -10,6 +10,7 @@ from .structural import (
     detect_semantics,
     dumps_json,
     explain_device,
+    list_subcircuits,
     neighborhood as structural_neighborhood,
     net_path,
     parse_structural_netlist,
@@ -19,6 +20,20 @@ from .structural import (
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def main() -> None:
     """Semantic static analysis for LLM-assisted analog circuit understanding."""
+
+
+@main.command("list-subckts")
+@click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def list_subckts(netlist: Path, output_format: str) -> None:
+    """List subcircuit definitions and direct device counts."""
+    subckts = list_subcircuits(netlist)
+    if output_format == "json":
+        click.echo(dumps_json({"subcircuits": subckts}))
+        return
+    for subckt in subckts:
+        ports = ", ".join(subckt["ports"])
+        click.echo(f"{subckt['name']} ({subckt['devices']} devices): {ports}")
 
 
 @main.command()

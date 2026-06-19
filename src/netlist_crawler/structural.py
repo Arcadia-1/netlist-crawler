@@ -164,6 +164,19 @@ def parse_structural_netlist(
     return circuit
 
 
+def list_subcircuits(path: Path) -> list[dict]:
+    """Return subcircuit names, ports, and direct device counts."""
+    subckts, _, _ = _parse_netlist_model(path)
+    return [
+        {
+            "name": definition.name,
+            "ports": definition.ports,
+            "devices": len(definition.devices),
+        }
+        for definition in subckts.values()
+    ]
+
+
 def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device], list[str]]:
     subckts: dict[str, SubcktDef] = {}
     top_devices: list[Device] = []
@@ -500,6 +513,9 @@ def _parse_device_line(line: str) -> Device | None:
     params = _parse_params(tokens[1:])
 
     if prefix == "X":
+        named = _parse_named_x_instance(tokens)
+        if named is not None:
+            return named
         node_tokens = _leading_node_tokens(tokens[1:])
         if len(node_tokens) < 2:
             return None
@@ -534,6 +550,37 @@ def _parse_device_line(line: str) -> Device | None:
     )
 
 
+def _parse_named_x_instance(tokens: list[str]) -> Device | None:
+    body = tokens[1:]
+    model_idx = None
+    for idx in range(len(body) - 1, -1, -1):
+        if "=" not in body[idx]:
+            model_idx = idx
+            break
+    if model_idx is None or model_idx == 0:
+        return None
+
+    named_pins: dict[str, str] = {}
+    for token in body[:model_idx]:
+        if "=" not in token:
+            return None
+        key, value = token.split("=", 1)
+        if not key or not value:
+            return None
+        named_pins[key] = value
+    if not named_pins:
+        return None
+    return Device(
+        name=tokens[0],
+        kind="X",
+        scope="",
+        model=body[model_idx],
+        pins=named_pins,
+        params=_parse_params(body[model_idx + 1:]),
+        raw=" ".join(tokens),
+    )
+
+
 def _copy_device(
     device: Device,
     *,
@@ -561,11 +608,20 @@ def _instance_port_map(
 ) -> dict[str, str]:
     mapped: dict[str, str] = {}
     for idx, port in enumerate(definition.ports, start=1):
-        actual = instance.pins.get(str(idx))
+        actual = _get_instance_pin(instance, port, str(idx))
         if actual is None:
             continue
         mapped[port] = _map_net(actual, prefix=prefix, net_map=net_map)
     return mapped
+
+
+def _get_instance_pin(instance: Device, port: str, positional_key: str) -> str | None:
+    if port in instance.pins:
+        return instance.pins[port]
+    for key, value in instance.pins.items():
+        if key.lower() == port.lower():
+            return value
+    return instance.pins.get(positional_key)
 
 
 def _map_net(net: str, *, prefix: str, net_map: dict[str, str]) -> str:

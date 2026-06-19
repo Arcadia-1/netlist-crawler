@@ -46,6 +46,21 @@ def test_summarize_can_restrict_to_topcell() -> None:
     assert {device["scope"] for device in payload["devices"]} == {"bias_block"}
 
 
+def test_list_subckts_reports_ports_and_counts() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["list-subckts", "examples/hierarchical_ota.sp", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    names = {subckt["name"] for subckt in payload["subcircuits"]}
+    assert names == {"diff_core", "load_core", "ota_top"}
+    ota_top = next(subckt for subckt in payload["subcircuits"] if subckt["name"] == "ota_top")
+    assert ota_top["ports"] == ["vinp", "vinn", "voutp", "voutn", "vdd", "vss", "vbias"]
+    assert ota_top["devices"] == 2
+
+
 def test_topcell_selection_prevents_cross_subckt_paths() -> None:
     result = CliRunner().invoke(
         main,
@@ -116,6 +131,28 @@ def test_detect_works_on_expanded_hierarchy() -> None:
     )
     assert diff_pair["devices"] == ["XCORE.M1", "XCORE.M2"]
     assert diff_pair["evidence"]["shared_source"] == "XCORE.tail"
+
+
+def test_named_port_hierarchy_expands_by_formal_port_name() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            "examples/named_port_hierarchy.sp",
+            "--topcell",
+            "top",
+            "--expand-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["summary"]["devices"] == 2
+    assert payload["nets"]["a"] == ["XINV.M1.G", "XINV.M2.G"]
+    assert payload["nets"]["y"] == ["XINV.M1.D", "XINV.M2.D"]
 
 
 def test_neighborhood_reports_adjacent_devices() -> None:
