@@ -203,7 +203,13 @@ def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device]
     parameters: dict[str, str] = {}
     current_subckt = ""
     current_def: SubcktDef | None = None
-    for line in _logical_lines(path):
+    lines = list(_logical_lines(path))
+    known_subckts = {
+        header[0]
+        for line in lines
+        if (header := _subckt_header(line.strip())) is not None
+    }
+    for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
@@ -224,7 +230,7 @@ def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device]
             directives.append(stripped)
             parameters.update(_param_directive(stripped))
             continue
-        device = _parse_device_line(stripped)
+        device = _parse_device_line(stripped, known_subckts=known_subckts)
         if device is None:
             continue
         if current_def is None:
@@ -1042,13 +1048,16 @@ def _logical_lines(path: Path, *, seen: set[Path] | None = None) -> Iterable[str
             yield from _logical_lines(include, seen=seen)
 
 
-def _parse_device_line(line: str) -> Device | None:
+def _parse_device_line(line: str, *, known_subckts: set[str] | None = None) -> Device | None:
     tokens = _tokenize_instance(line)
     if len(tokens) < 2:
         return None
     name = tokens[0]
     prefix = name[0].upper()
     params = _parse_params(tokens[1:])
+    known_subckt_instance = _parse_known_subckt_instance(tokens, known_subckts or set(), line)
+    if known_subckt_instance is not None:
+        return known_subckt_instance
 
     if prefix == "X":
         prefixed_primitive = _parse_x_prefixed_primitive(tokens, line)
@@ -1100,6 +1109,40 @@ def _primitive_model(tokens: list[str], prefix: str, model_idx: int) -> str:
     if prefix in {"F", "H", "K"}:
         return ""
     return tokens[model_idx]
+
+
+def _parse_known_subckt_instance(
+    tokens: list[str],
+    known_subckts: set[str],
+    line: str,
+) -> Device | None:
+    if not known_subckts:
+        return None
+    body = tokens[1:]
+    model_idx = None
+    for idx, token in enumerate(body):
+        if token in known_subckts:
+            model_idx = idx
+            break
+    if model_idx is None:
+        return None
+    if any("=" in token for token in body[:model_idx]):
+        return None
+
+    pins = {
+        str(idx): net
+        for idx, net in enumerate(body[:model_idx], start=1)
+        if net != "/"
+    }
+    return Device(
+        name=tokens[0],
+        kind="X",
+        scope="",
+        model=body[model_idx],
+        pins=pins,
+        params=_parse_params(body[model_idx + 1:]),
+        raw=line,
+    )
 
 
 def _parse_x_prefixed_primitive(tokens: list[str], line: str) -> Device | None:

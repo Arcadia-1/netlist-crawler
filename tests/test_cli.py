@@ -715,6 +715,66 @@ def test_dollar_pins_x_instances_use_named_port_mapping(tmp_path) -> None:
     assert "ND2D1A" not in payload["nets"]
 
 
+def test_spectre_non_x_prefix_instances_use_subckt_port_mapping(tmp_path) -> None:
+    netlist = tmp_path / "spectre_i_instances.scs"
+    netlist.write_text(
+        """
+        subckt BUSDRV AVDD1 AVSS1 DGND DI33 DO50 DVDD AGND
+        R0 (DO50 DI33) resistor r=1k
+        ends BUSDRV
+
+        subckt TOP AVDD1 AVSS1 DGND DVDD AGND REG0 OUT0
+        I3\\<0\\> (AVDD1 AVSS1 DGND REG0 OUT0 DVDD AGND) BUSDRV
+        I0 BUSDRV
+        ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summarized = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "TOP", "--format", "json"],
+    )
+
+    assert summarized.exit_code == 0
+    payload = json.loads(summarized.output)
+    devices = {device["name"]: device for device in payload["devices"]}
+    assert payload["summary"]["device_kinds"] == {"X": 2}
+    assert devices["I3\\<0\\>"]["model"] == "BUSDRV"
+    assert devices["I3\\<0\\>"]["pins"] == {
+        "1": "AVDD1",
+        "2": "AVSS1",
+        "3": "DGND",
+        "4": "REG0",
+        "5": "OUT0",
+        "6": "DVDD",
+        "7": "AGND",
+    }
+    assert devices["I0"]["model"] == "BUSDRV"
+    assert devices["I0"]["pins"] == {}
+
+    expanded = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            str(netlist),
+            "--topcell",
+            "TOP",
+            "--expand-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert expanded.exit_code == 0
+    expanded_payload = json.loads(expanded.output)
+    expanded_devices = {device["name"]: device for device in expanded_payload["devices"]}
+    assert expanded_devices["I3\\<0\\>.R0"]["pins"] == {"1": "OUT0", "2": "REG0"}
+    assert expanded_devices["I0.R0"]["pins"] == {"1": "I0.DO50", "2": "I0.DI33"}
+
+
 def test_x_prefixed_pex_primitives_are_not_subckt_instances(tmp_path) -> None:
     netlist = tmp_path / "pex_primitives.sp"
     netlist.write_text(
