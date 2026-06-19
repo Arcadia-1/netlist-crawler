@@ -32,6 +32,7 @@ separate project.
 ## CLI Usage
 
 ```bash
+netlist-crawler brief examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1
 netlist-crawler list-subckts examples/hierarchical_ota.sp --format json
 netlist-crawler list-subckts examples/include_top.sp --format json
 netlist-crawler summarize examples/simple_diff_pair.sp
@@ -45,15 +46,17 @@ netlist-crawler detect examples/simple_diff_pair.sp --pattern diff-pair
 netlist-crawler explain examples/simple_diff_pair.sp --device M1
 ```
 
-`summarize`, `neighborhood`, and `path` currently operate on a lightweight
-SPICE-like structural parser, support `--topcell` for subcircuit selection, and
-support relative `.include` files plus `--expand-depth` for hierarchical
-instance expansion, including simple named-port X instances. All structural
-commands support `--format json` for agent use. Path and neighborhood traversal
-can exclude common rails or explicit project nets with `--exclude-common-nets`
-and `--exclude-net`. The semantic detector and device explanation commands
-include first-pass rules for differential pairs, current mirrors, tail current
-sources, and active loads, with evidence and confidence fields in JSON output.
+`brief` emits a compact LLM-readable summary with topology counts, high-degree
+nets, and semantic-pattern evidence. `summarize`, `neighborhood`, and `path`
+operate on a lightweight SPICE-like structural parser, support `--topcell` for
+subcircuit selection, and support relative `.include` files plus
+`--expand-depth` for hierarchical instance expansion, including simple
+named-port X instances. All structural commands support `--format json` for
+agent use. Path and neighborhood traversal can exclude common rails or explicit
+project nets with `--exclude-common-nets` and `--exclude-net`. The semantic
+detector and device explanation commands include first-pass rules for
+differential pairs, current mirrors, tail current sources, and active loads,
+with evidence and confidence fields in JSON output.
 
 The post-layout parasitic analysis engine is also available through:
 
@@ -67,10 +70,9 @@ netlist-crawler inject --help
 
 1. Harden semantic detectors beyond the first-pass rules: cascodes, active
    loads, bias trees, feedback paths, and project-specific exceptions.
-2. Add LLM-oriented brief output with evidence and confidence fields.
-3. Build evaluation tasks comparing LLM-only, raw-netlist, graph-tool, and
+2. Build evaluation tasks comparing LLM-only, raw-netlist, graph-tool, and
    semantic-tool workflows.
-4. Expand Spectre/SPICE syntax coverage around parameters, library sections,
+3. Expand Spectre/SPICE syntax coverage around parameters, library sections,
    and project-specific net aliases.
 
 ## Development

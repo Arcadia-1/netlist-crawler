@@ -23,6 +23,18 @@ def main() -> None:
     """Semantic static analysis for LLM-assisted analog circuit understanding."""
 
 
+@main.command()
+@click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
+@click.option("--max-patterns", default=20, show_default=True, help="Maximum semantic matches.")
+def brief(netlist: Path, topcell: str | None, expand_depth: int, max_patterns: int) -> None:
+    """Emit a compact LLM-readable circuit brief."""
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
+    for line in _brief_lines(circuit, max_patterns=max_patterns):
+        click.echo(line)
+
+
 @main.command("list-subckts")
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
@@ -263,6 +275,55 @@ def _exclude_nets(exclude_common_nets: bool, exclude_net: tuple[str, ...]) -> se
     if exclude_common_nets:
         excluded.update(COMMON_NETS)
     return excluded
+
+
+def _brief_lines(circuit, *, max_patterns: int) -> list[str]:
+    summary = circuit.summary()
+    lines = [
+        f"Source: {summary['source']}",
+    ]
+    if summary["topcell"]:
+        lines.append(f"Topcell: {summary['topcell']}")
+    lines.extend([
+        f"Devices: {summary['devices']}; Nets: {summary['nets']}",
+        "Device kinds: " + _format_counts(summary["device_kinds"]),
+        "Top nets: " + _format_top_nets(summary["top_nets"]),
+    ])
+    if summary["expanded"]:
+        lines.append(f"Hierarchy: expanded to depth {summary['expand_depth']}")
+    matches = detect_semantics(circuit, "all")[:max_patterns]
+    lines.append("Semantic patterns:")
+    if not matches:
+        lines.append("- none detected")
+        return lines
+    for match in matches:
+        evidence = "; ".join(
+            f"{key}={_brief_value(value)}"
+            for key, value in match["evidence"].items()
+        )
+        lines.append(
+            f"- {match['pattern']}: {', '.join(match['devices'])}; "
+            f"confidence={match['confidence']}; {evidence}"
+        )
+    return lines
+
+
+def _format_counts(counts: dict) -> str:
+    if not counts:
+        return "none"
+    return ", ".join(f"{key}={value}" for key, value in counts.items())
+
+
+def _format_top_nets(top_nets: list[dict]) -> str:
+    if not top_nets:
+        return "none"
+    return ", ".join(f"{item['net']}({item['degree']})" for item in top_nets[:8])
+
+
+def _brief_value(value) -> str:
+    if isinstance(value, list):
+        return "/".join(str(item) for item in value)
+    return str(value)
 
 
 if __name__ == "__main__":

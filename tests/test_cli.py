@@ -12,6 +12,37 @@ def test_cli_help() -> None:
     assert "Semantic static analysis" in result.output
 
 
+def test_brief_reports_semantic_patterns() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["brief", "examples/simple_diff_pair.sp"],
+    )
+
+    assert result.exit_code == 0
+    assert "Devices: 5; Nets: 8" in result.output
+    assert "differential_pair: M1, M2" in result.output
+    assert "active_load: M4, M5" in result.output
+
+
+def test_brief_reports_hierarchy_expansion() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "brief",
+            "examples/hierarchical_ota.sp",
+            "--topcell",
+            "ota_top",
+            "--expand-depth",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Topcell: ota_top" in result.output
+    assert "Hierarchy: expanded to depth 1" in result.output
+    assert "differential_pair: XCORE.M1, XCORE.M2" in result.output
+
+
 def test_summarize_json_on_simple_diff_pair() -> None:
     result = CliRunner().invoke(
         main,
