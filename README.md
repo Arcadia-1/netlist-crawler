@@ -38,6 +38,7 @@ netlist-crawler benchmark benchmarks/seed_tasks.json
 netlist-crawler list-subckts examples/hierarchical_ota.sp --format json
 netlist-crawler list-subckts examples/include_top.sp --format json
 netlist-crawler summarize examples/simple_diff_pair.sp
+netlist-crawler summarize examples/param_subckt.sp --topcell param_amp --format json
 netlist-crawler summarize examples/two_subckts.sp --topcell bias_block --format json
 netlist-crawler summarize examples/include_top.sp --topcell include_top --expand-depth 1 --format json
 netlist-crawler summarize examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
@@ -55,9 +56,10 @@ LLM-readable summary with topology counts, high-degree nets, and
 semantic-pattern evidence. `summarize`, `neighborhood`, and `path` operate on a
 lightweight SPICE-like structural parser, support `--topcell` for subcircuit
 selection, and support relative `.include` files plus `--expand-depth` for
-hierarchical instance expansion, including simple named-port X instances. All
-structural commands support `--format json` for agent use. Path and
-neighborhood traversal can exclude common rails or explicit project nets with
+hierarchical instance expansion, including simple named-port X instances. It
+preserves `.param` values and `.subckt` default parameters as metadata. All
+structural commands support `--format json` for agent use. Path and neighborhood
+traversal can exclude common rails or explicit project nets with
 `--exclude-common-nets` and `--exclude-net`; `--max-degree` keeps very
 high-degree nets visible without letting them dominate traversal. The semantic
 detector and device explanation commands include first-pass rules for
@@ -82,8 +84,8 @@ netlist-crawler inject --help
    paths, and project-specific exceptions.
 2. Expand the benchmark into LLM-only, raw-netlist, graph-tool, and
    semantic-tool comparisons.
-3. Expand Spectre/SPICE syntax coverage around parameters, library sections,
-   and project-specific net aliases.
+3. Expand Spectre/SPICE syntax coverage around library sections and
+   project-specific net aliases.
 
 ## Development
 

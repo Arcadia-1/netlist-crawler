@@ -154,6 +154,33 @@ def test_list_subckts_reports_ports_and_counts() -> None:
     assert ota_top["devices"] == 2
 
 
+def test_parameter_metadata_is_reported_without_polluting_ports() -> None:
+    listed = CliRunner().invoke(
+        main,
+        ["list-subckts", "examples/param_subckt.sp", "--format", "json"],
+    )
+    assert listed.exit_code == 0
+    subckt = json.loads(listed.output)["subcircuits"][0]
+    assert subckt["ports"] == ["vin", "vout", "vss", "vbias"]
+    assert subckt["params"] == {"WN": "10u", "LN": "LMIN"}
+
+    summarized = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            "examples/param_subckt.sp",
+            "--topcell",
+            "param_amp",
+            "--format",
+            "json",
+        ],
+    )
+    assert summarized.exit_code == 0
+    payload = json.loads(summarized.output)
+    assert payload["summary"]["parameters"] == {"WBIAS": "20u", "LMIN": "180n"}
+    assert payload["devices"][0]["params"] == {"w": "WN", "l": "LN"}
+
+
 def test_list_subckts_follows_relative_includes() -> None:
     result = CliRunner().invoke(
         main,

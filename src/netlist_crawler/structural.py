@@ -51,6 +51,7 @@ class SubcktDef:
 
     name: str
     ports: list[str] = field(default_factory=list)
+    params: dict[str, str] = field(default_factory=dict)
     devices: list[Device] = field(default_factory=list)
 
 
@@ -63,6 +64,7 @@ class StructuralCircuit:
     subcircuits: list[str] = field(default_factory=list)
     devices: list[Device] = field(default_factory=list)
     directives: list[str] = field(default_factory=list)
+    parameters: dict[str, str] = field(default_factory=dict)
     expanded: bool = False
     expand_depth: int = 0
 
@@ -102,6 +104,7 @@ class StructuralCircuit:
             "devices": len(self.devices),
             "nets": len(nets),
             "directives": len(self.directives),
+            "parameters": self.parameters,
             "device_kinds": dict(sorted(kinds.items())),
             "top_nets": [
                 {"net": net, "degree": degree}
@@ -135,12 +138,13 @@ def parse_structural_netlist(
     expand_depth: int = 0,
 ) -> StructuralCircuit:
     """Parse a pragmatic subset of SPICE/Spectre netlist structure."""
-    subckts, top_devices, directives = _parse_netlist_model(path)
+    subckts, top_devices, directives, parameters = _parse_netlist_model(path)
     circuit = StructuralCircuit(
         source=str(path),
         topcell=topcell or "",
         subcircuits=list(subckts),
         directives=directives,
+        parameters=parameters,
         expanded=bool(topcell and expand_depth > 0),
         expand_depth=expand_depth,
     )
@@ -173,21 +177,23 @@ def parse_structural_netlist(
 
 def list_subcircuits(path: Path) -> list[dict]:
     """Return subcircuit names, ports, and direct device counts."""
-    subckts, _, _ = _parse_netlist_model(path)
+    subckts, _, _, _ = _parse_netlist_model(path)
     return [
         {
             "name": definition.name,
             "ports": definition.ports,
+            "params": definition.params,
             "devices": len(definition.devices),
         }
         for definition in subckts.values()
     ]
 
 
-def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device], list[str]]:
+def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device], list[str], dict[str, str]]:
     subckts: dict[str, SubcktDef] = {}
     top_devices: list[Device] = []
     directives: list[str] = []
+    parameters: dict[str, str] = {}
     current_subckt = ""
     current_def: SubcktDef | None = None
     for line in _logical_lines(path):
@@ -196,9 +202,9 @@ def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device]
             continue
         header = _subckt_header(stripped)
         if header is not None:
-            subckt_name, ports = header
+            subckt_name, ports, subckt_params = header
             current_subckt = subckt_name
-            current_def = SubcktDef(name=subckt_name, ports=ports)
+            current_def = SubcktDef(name=subckt_name, ports=ports, params=subckt_params)
             subckts[subckt_name] = current_def
             directives.append(stripped)
             continue
@@ -209,6 +215,7 @@ def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device]
             continue
         if stripped.startswith(".") or stripped.lower().startswith(("simulator ", "include ")):
             directives.append(stripped)
+            parameters.update(_param_directive(stripped))
             continue
         device = _parse_device_line(stripped)
         if device is None:
@@ -217,7 +224,7 @@ def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device]
             top_devices.append(device)
             continue
         current_def.devices.append(_copy_device(device, scope=current_subckt))
-    return subckts, top_devices, directives
+    return subckts, top_devices, directives, parameters
 
 
 def _expand_subckt(
@@ -925,20 +932,36 @@ def _include_path(line: str, *, base_dir: Path) -> Path | None:
     return target
 
 
-def _subckt_header(line: str) -> tuple[str, list[str]] | None:
+def _subckt_header(line: str) -> tuple[str, list[str], dict[str, str]] | None:
     tokens = line.split()
     if len(tokens) >= 2 and tokens[0].lower() in {".subckt", "subckt"}:
         ports = []
+        params: dict[str, str] = {}
+        in_params = False
         for token in tokens[2:]:
+            lower = token.lower()
+            if lower in {"params:", "parameters:"}:
+                in_params = True
+                continue
             if "=" in token:
-                break
-            if token.lower() in {"params:", "parameters:"}:
-                break
+                in_params = True
+                key, value = token.split("=", 1)
+                params[key] = value
+                continue
+            if in_params:
+                continue
             ports.append(token)
-        return tokens[1], ports
+        return tokens[1], ports, params
     return None
 
 
 def _is_ends(line: str) -> bool:
     token = line.split(maxsplit=1)[0].lower()
     return token in {".ends", "ends"}
+
+
+def _param_directive(line: str) -> dict[str, str]:
+    tokens = line.split()
+    if not tokens or tokens[0].lower() not in {".param", "param", "parameters"}:
+        return {}
+    return _parse_params(tokens[1:])
