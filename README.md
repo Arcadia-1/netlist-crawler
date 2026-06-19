@@ -99,6 +99,17 @@ python -m pytest -q
 The pytest suite includes structural CLI tests and the parasitic fixture matrix
 ported from `analog-netlist-crawl`.
 
+Python API:
+
+```python
+from pathlib import Path
+import netlist_crawler as nc
+
+circuit = nc.parse_structural_netlist(Path("examples/simple_diff_pair.sp"))
+print(circuit.summary())
+print(nc.detect_semantics(circuit, "diff-pair"))
+```
+
 ## Relationship to Workflow Repositories
 
 Netlist Crawler is the infrastructure layer. Agent prompts, multi-step circuit

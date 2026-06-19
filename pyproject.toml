@@ -32,6 +32,7 @@ netlist-crawler = "netlist_crawler.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/netlist_crawler"]
+artifacts = ["src/netlist_crawler/py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
