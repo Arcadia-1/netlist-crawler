@@ -679,6 +679,42 @@ def test_export_graph_preserves_controlled_and_coupled_devices(tmp_path) -> None
     assert any(edge["target"] == "net:in_p" for edge in payload["edges"])
 
 
+def test_dollar_pins_x_instances_use_named_port_mapping(tmp_path) -> None:
+    netlist = tmp_path / "dollar_pins.sp"
+    netlist.write_text(
+        """
+        .subckt top CLK EN AGND AVDD AVSS OUT
+        XI12 / ND2D1A $PINS A1=CLK A2=EN SUB=AGND Z=OUT vdd=AVDD vss=AVSS
+        .ends top
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "top", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["summary"]["devices"] == 1
+    assert payload["summary"]["nets"] == 6
+    device = payload["devices"][0]
+    assert device["name"] == "XI12"
+    assert device["model"] == "ND2D1A"
+    assert device["pins"] == {
+        "A1": "CLK",
+        "A2": "EN",
+        "SUB": "AGND",
+        "Z": "OUT",
+        "vdd": "AVDD",
+        "vss": "AVSS",
+    }
+    assert "/" not in payload["nets"]
+    assert "ND2D1A" not in payload["nets"]
+
+
 def test_export_graph_graphml_smoke() -> None:
     result = CliRunner().invoke(
         main,

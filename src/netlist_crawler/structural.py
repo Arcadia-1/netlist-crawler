@@ -1051,6 +1051,9 @@ def _parse_device_line(line: str) -> Device | None:
     params = _parse_params(tokens[1:])
 
     if prefix == "X":
+        dollar_pins = _parse_dollar_pins_x_instance(tokens)
+        if dollar_pins is not None:
+            return dollar_pins
         named = _parse_named_x_instance(tokens)
         if named is not None:
             return named
@@ -1094,6 +1097,45 @@ def _primitive_model(tokens: list[str], prefix: str, model_idx: int) -> str:
     if prefix in {"F", "H", "K"}:
         return ""
     return tokens[model_idx]
+
+
+def _parse_dollar_pins_x_instance(tokens: list[str]) -> Device | None:
+    try:
+        marker_idx = next(
+            idx for idx, token in enumerate(tokens) if token.upper() == "$PINS"
+        )
+    except StopIteration:
+        return None
+    if marker_idx < 2:
+        return None
+
+    model = tokens[marker_idx - 1]
+    positional_nets = [token for token in tokens[1:marker_idx - 1] if token != "/"]
+    named_pins: dict[str, str] = {}
+    param_tokens: list[str] = []
+    for token in tokens[marker_idx + 1:]:
+        if "=" not in token:
+            param_tokens.append(token)
+            continue
+        key, value = token.split("=", 1)
+        if not key or not value:
+            param_tokens.append(token)
+            continue
+        named_pins[key] = value
+
+    if not named_pins and not positional_nets:
+        return None
+    pins = {str(idx): net for idx, net in enumerate(positional_nets, start=1)}
+    pins.update(named_pins)
+    return Device(
+        name=tokens[0],
+        kind="X",
+        scope="",
+        model=model,
+        pins=pins,
+        params=_parse_params(param_tokens),
+        raw=" ".join(tokens),
+    )
 
 
 def _parse_named_x_instance(tokens: list[str]) -> Device | None:
