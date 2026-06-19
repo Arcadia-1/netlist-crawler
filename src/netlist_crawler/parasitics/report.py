@@ -19,8 +19,8 @@ from __future__ import annotations
 import io
 from collections import defaultdict
 
-from ir import Circuit
-from kernels import (
+from .ir import Circuit
+from .kernels import (
     effective_resistance,
     resistance_matrix,
     within_net_pin_r,
@@ -213,7 +213,7 @@ def _emit_section_within_net_r(
     # Build the R-edge adjacency once and share across every net —
     # within_net_pin_r would otherwise rebuild it per call (O(E) each,
     # and E ≈ hundreds of thousands on real data).
-    from kernels.r_network import _build_adjacency
+    from .kernels.r_network import _build_adjacency
     adj = _build_adjacency(circuit)
     for net in nets:
         out.write(f"\n---- {net} ----\n")

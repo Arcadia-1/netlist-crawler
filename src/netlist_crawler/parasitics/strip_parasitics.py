@@ -26,13 +26,9 @@ import argparse
 import os
 import re
 import sys
-from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE))
-
-from adapters import parse_netlist
-from kernels.r_network import _build_adjacency, _component_of
+from .adapters import parse_netlist
+from .kernels.r_network import _build_adjacency, _component_of
 
 
 # Spectre/SPICE device-line prefixes we keep.

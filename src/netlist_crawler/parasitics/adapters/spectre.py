@@ -22,8 +22,8 @@ import os
 import re
 from collections import defaultdict, Counter
 
-from ir import Circuit, Device, is_power
-from adapters._util import parse_si
+from ..ir import Circuit, Device, is_power
+from ._util import parse_si
 
 
 # ---- low-level file handling -----------------------------------------------

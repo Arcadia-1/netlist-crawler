@@ -6,6 +6,15 @@ from pathlib import Path
 
 import click
 
+from .structural import (
+    detect_semantics,
+    dumps_json,
+    explain_device,
+    neighborhood as structural_neighborhood,
+    net_path,
+    parse_structural_netlist,
+)
+
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def main() -> None:
@@ -14,49 +23,124 @@ def main() -> None:
 
 @main.command()
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def summarize(netlist: Path) -> None:
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def summarize(netlist: Path, output_format: str) -> None:
     """Summarize a netlist at a high level."""
-    click.echo(f"Netlist summary is not implemented yet: {netlist}")
+    circuit = parse_structural_netlist(netlist)
+    summary = circuit.summary()
+    if output_format == "json":
+        click.echo(dumps_json(circuit.to_json_dict()))
+        return
+
+    click.echo(f"Source: {summary['source']}")
+    click.echo(f"Devices: {summary['devices']}")
+    click.echo(f"Nets: {summary['nets']}")
+    click.echo(f"Directives: {summary['directives']}")
+    click.echo("Device kinds:")
+    for kind, count in summary["device_kinds"].items():
+        click.echo(f"  {kind}: {count}")
+    click.echo("Top nets:")
+    for item in summary["top_nets"]:
+        click.echo(f"  {item['net']}: degree {item['degree']}")
 
 
 @main.command()
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--net", "net_name", required=True, help="Net to inspect.")
 @click.option("--depth", default=1, show_default=True, help="Traversal depth.")
-def neighborhood(netlist: Path, net_name: str, depth: int) -> None:
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def neighborhood(netlist: Path, net_name: str, depth: int, output_format: str) -> None:
     """Inspect the neighborhood around a net."""
-    click.echo(
-        f"Neighborhood query is not implemented yet: {netlist}, "
-        f"net={net_name}, depth={depth}"
-    )
+    circuit = parse_structural_netlist(netlist)
+    result = structural_neighborhood(circuit, net_name, depth)
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        return
+    if not result["found"]:
+        click.echo(f"Net not found: {net_name}")
+        return
+    click.echo(f"Net: {net_name}")
+    click.echo("Neighbor nets:")
+    for net in result["nets"]:
+        click.echo(f"  {net}")
+    click.echo("Devices:")
+    for device in result["devices"]:
+        pins = ", ".join(f"{role}={net}" for role, net in device["pins"].items())
+        label = f"{device['name']} ({device['kind']}"
+        if device["model"]:
+            label += f", {device['model']}"
+        label += ")"
+        click.echo(f"  {label}: {pins}")
 
 
 @main.command()
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--from", "source", required=True, help="Source net.")
 @click.option("--to", "target", required=True, help="Target net.")
-def path(netlist: Path, source: str, target: str) -> None:
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def path(netlist: Path, source: str, target: str, output_format: str) -> None:
     """Find likely connectivity paths between two nets."""
-    click.echo(
-        f"Path query is not implemented yet: {netlist}, "
-        f"from={source}, to={target}"
-    )
+    circuit = parse_structural_netlist(netlist)
+    result = net_path(circuit, source, target)
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        return
+    if not result["found"]:
+        click.echo(f"No structural path from {source} to {target}: {result['reason']}")
+        return
+    click.echo(" -> ".join(result["path"]))
 
 
 @main.command()
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.option("--pattern", required=True, help="Pattern to detect, e.g. diff-pair.")
-def detect(netlist: Path, pattern: str) -> None:
+@click.option("--pattern", default="all", show_default=True, help="Pattern to detect.")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def detect(netlist: Path, pattern: str, output_format: str) -> None:
     """Detect analog semantic patterns."""
-    click.echo(f"Pattern detection is not implemented yet: {netlist}, pattern={pattern}")
+    circuit = parse_structural_netlist(netlist)
+    try:
+        hits = detect_semantics(circuit, pattern)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if output_format == "json":
+        click.echo(dumps_json({"pattern": pattern, "matches": hits}))
+        return
+    if not hits:
+        click.echo(f"No matches for pattern: {pattern}")
+        return
+    for hit in hits:
+        evidence = ", ".join(f"{k}={v}" for k, v in hit["evidence"].items())
+        click.echo(
+            f"{hit['pattern']}: {', '.join(hit['devices'])} "
+            f"(confidence={hit['confidence']})"
+        )
+        click.echo(f"  evidence: {evidence}")
 
 
 @main.command()
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--device", required=True, help="Device name to explain.")
-def explain(netlist: Path, device: str) -> None:
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def explain(netlist: Path, device: str, output_format: str) -> None:
     """Explain the likely role of a device."""
-    click.echo(f"Device explanation is not implemented yet: {netlist}, device={device}")
+    circuit = parse_structural_netlist(netlist)
+    result = explain_device(circuit, device)
+    if output_format == "json":
+        click.echo(dumps_json(result))
+        return
+    if not result["found"]:
+        click.echo(f"Device not found: {device}")
+        return
+    pins = ", ".join(f"{role}={net}" for role, net in result["pins"].items())
+    click.echo(f"{device} ({result['kind']}, {result['model']}): {pins}")
+    if not result["roles"]:
+        click.echo("No semantic role detected.")
+        return
+    for role in result["roles"]:
+        click.echo(
+            f"  {role['pattern']} with {', '.join(role['devices'])} "
+            f"(confidence={role['confidence']})"
+        )
 
 
 @main.command(

@@ -31,19 +31,14 @@ import os
 import re
 import sys
 import time
-from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE))
-
-from adapters import parse_netlist
-from kernels.r_network import (
+from .kernels.r_network import (
     _build_adjacency, _build_canonical_node_map, _component_of,
     effective_resistance, per_instance_port_r, _compute_position_map,
 )
-from kernels.mor import (foster_via_algo,
+from .kernels.mor import (foster_via_algo,
                          _prima_arnoldi_and_e, prima_foster_slice)
-from parse_cache import load_or_parse
+from .parse_cache import load_or_parse
 
 
 def _parse_configs(spec: str) -> list[tuple[str, int]]:

@@ -13,11 +13,7 @@ import sys
 import tempfile
 import time
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-if _HERE not in sys.path:
-    sys.path.insert(0, _HERE)
-
-_CACHE_DIR = os.path.join(tempfile.gettempdir(), "analog-netlist-crawl-cache")
+_CACHE_DIR = os.path.join(tempfile.gettempdir(), "netlist-crawler-parasitics-cache-v2")
 
 
 def _cache_path(source: str, extra_key: str = "") -> str:
@@ -33,7 +29,7 @@ def load_or_parse(source: str, *, use_cache: bool = True,
                   fmt: str | None = None,
                   log=print):
     """Parse a netlist, using a pickle cache keyed by file identity."""
-    from adapters import parse_netlist   # lazy — avoids import cycles
+    from .adapters import parse_netlist   # lazy — avoids import cycles
     parse_kw = parse_kw or {}
     extra_key = f"fmt={fmt}|{sorted(parse_kw.items())}"
     cache_file = _cache_path(source, extra_key)

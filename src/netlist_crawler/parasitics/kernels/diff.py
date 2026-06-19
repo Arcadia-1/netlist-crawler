@@ -32,8 +32,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from ir import Circuit, is_power
-from kernels.r_network import _build_adjacency, _build_canonical_node_map
+from ..ir import Circuit, is_power
+from .r_network import _build_adjacency, _build_canonical_node_map
 
 
 def _named_nets(c: Circuit) -> list[str]:

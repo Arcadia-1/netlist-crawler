@@ -19,7 +19,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from ir import Circuit
+from ..ir import Circuit
 
 
 def _build_adjacency(circuit: Circuit) -> dict[str, list[str]]:

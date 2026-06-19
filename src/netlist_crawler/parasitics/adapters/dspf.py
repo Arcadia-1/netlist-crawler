@@ -35,8 +35,8 @@ from __future__ import annotations
 import os
 import re
 
-from ir import Circuit, Device, is_power
-from adapters._util import parse_si
+from ..ir import Circuit, Device, is_power
+from ._util import parse_si
 
 
 _SUBCKT_RE = re.compile(r"^\.subckt\s+(\S+)\s*(.*)$", re.I)

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from ir import Circuit
+from ..ir import Circuit
 
 
 def per_net_cg_sum(circuit: Circuit) -> dict[str, float]:

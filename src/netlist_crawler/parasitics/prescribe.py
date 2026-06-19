@@ -55,13 +55,9 @@ import os
 import sys
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE))
-
-from adapters import parse_netlist
-from kernels import batch_prescription, _build_canonical_node_map
-from kernels.r_network import _build_adjacency
-from parse_cache import load_or_parse
+from .kernels import batch_prescription, _build_canonical_node_map
+from .kernels.r_network import _build_adjacency
+from .parse_cache import load_or_parse
 
 
 def main(argv: list[str] | None = None) -> int:

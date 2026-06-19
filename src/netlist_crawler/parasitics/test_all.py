@@ -15,12 +15,10 @@ import math
 import os
 import sys
 
-# Make absolute imports like `from ir import Circuit` work regardless of cwd.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _HERE)
 
-from adapters import parse_mrpp, parse_spectre, parse_dspf, detect_format  # noqa: E402
-from kernels import (                                              # noqa: E402
+from .adapters import parse_mrpp, parse_spectre, parse_dspf, detect_format
+from .kernels import (
     effective_resistance,
     per_net_cg_sum,
     per_pair_cc_sum,

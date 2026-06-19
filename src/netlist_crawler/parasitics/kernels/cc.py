@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from ir import Circuit
+from ..ir import Circuit
 
 
 def per_pair_cc_sum(circuit: Circuit) -> dict[tuple[str, str], float]:

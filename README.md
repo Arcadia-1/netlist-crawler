@@ -29,7 +29,7 @@ Netlist Crawler focuses on the infrastructure layer:
 Downstream agent workflows, demos, and evaluations can build on this CLI as a
 separate project.
 
-## Initial CLI Sketch
+## CLI Usage
 
 ```bash
 netlist-crawler summarize examples/simple_diff_pair.sp
@@ -39,8 +39,13 @@ netlist-crawler detect examples/simple_diff_pair.sp --pattern diff-pair
 netlist-crawler explain examples/simple_diff_pair.sp --device M1
 ```
 
-The high-level semantic commands are an initial scaffold. The post-layout
-parasitic analysis engine is already available through:
+`summarize`, `neighborhood`, and `path` currently operate on a lightweight
+SPICE-like structural parser and support `--format json` for agent use. The
+semantic detector and device explanation commands include first-pass rules for
+differential pairs, current mirrors, and tail current sources, with evidence and
+confidence fields in JSON output.
+
+The post-layout parasitic analysis engine is also available through:
 
 ```bash
 netlist-crawler scan examples/parasitics/f1_rc_ladder.flat.scs
@@ -50,15 +55,25 @@ netlist-crawler inject --help
 
 ## Roadmap
 
-1. Stabilize the existing post-layout adapters, IR, and R/C kernels as package
-   APIs rather than standalone scripts.
-2. Add a general device-net graph layer with JSON export.
-3. Implement topology query commands: `summarize`, `neighborhood`, and `path`.
-4. Add first semantic detectors: differential pair, current mirror, and tail
-   source.
-5. Add LLM-oriented brief output with evidence and confidence fields.
-6. Build evaluation tasks comparing LLM-only, raw-netlist, graph-tool, and
+1. Harden semantic detectors beyond the first-pass rules: cascodes, active
+   loads, bias trees, feedback paths, and project-specific exceptions.
+2. Add LLM-oriented brief output with evidence and confidence fields.
+3. Build evaluation tasks comparing LLM-only, raw-netlist, graph-tool, and
    semantic-tool workflows.
+4. Expand Spectre/SPICE syntax coverage around hierarchy, includes, and
+   project-specific net aliases.
+
+## Development
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[test]'
+python -m pytest -q
+```
+
+The pytest suite includes structural CLI tests and the parasitic fixture matrix
+ported from `analog-netlist-crawl`.
 
 ## Relationship to Workflow Repositories
 

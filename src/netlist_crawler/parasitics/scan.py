@@ -22,12 +22,8 @@ import argparse
 import os
 import sys
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _HERE)
-
-from adapters import parse_netlist, detect_format
-from parse_cache import load_or_parse
-from report import build_report
+from .parse_cache import load_or_parse
+from .report import build_report
 
 
 def parse_trace_spec(spec: str) -> tuple[list[str], list[str], str]:
@@ -46,7 +42,7 @@ def parse_trace_spec(spec: str) -> tuple[list[str], list[str], str]:
 
 def parse_si_threshold(s: str) -> float:
     """Parse a user-typed threshold like "1f" into farads."""
-    from adapters._util import parse_si
+    from .adapters._util import parse_si
     v = parse_si(s)
     if v != v:
         raise SystemExit(f"unparseable threshold: {s!r}")

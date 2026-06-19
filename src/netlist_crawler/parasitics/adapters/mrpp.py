@@ -16,8 +16,8 @@ from __future__ import annotations
 import os
 import re
 
-from ir import Circuit, is_power
-from adapters._util import parse_si
+from ..ir import Circuit, is_power
+from ._util import parse_si
 
 
 # mr_pp lines:  mr_pp '<kind> "<name>" '(<pair>) <value>
