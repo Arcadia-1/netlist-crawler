@@ -629,6 +629,56 @@ def test_export_graph_json_includes_semantic_nodes_and_edges() -> None:
     assert any(item["class"] == "signal_input" for item in vinp["classes"])
 
 
+def test_export_graph_preserves_controlled_and_coupled_devices(tmp_path) -> None:
+    netlist = tmp_path / "controlled_sources.sp"
+    netlist.write_text(
+        """
+        .subckt controlled in_p in_n out_p out_n ctrl sense lp ls swp swn
+        E1 out_p out_n in_p in_n vcvs gain=10
+        F1 out_p out_n VSENSE gain=2
+        G1 out_p out_n ctrl 0 vccs gm=1m
+        H1 out_p out_n VSENSE transresistance=5k
+        B1 out_p 0 v=V(in_p,in_n)*2
+        L1 lp 0 1u
+        L2 ls 0 2u
+        K1 L1 L2 k=0.98
+        W1 swp swn ctrl 0 relay vt=0.5
+        .ends controlled
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["export-graph", str(netlist), "--topcell", "controlled", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    devices = {
+        node["name"]: node
+        for node in payload["nodes"]
+        if node["type"] == "device"
+    }
+    assert {"E1", "F1", "G1", "H1", "B1", "K1", "W1"} <= set(devices)
+    assert devices["E1"]["kind"] == "E"
+    assert devices["E1"]["model"] == "vcvs"
+    assert devices["E1"]["params"] == {"gain": "10"}
+    assert devices["F1"]["kind"] == "F"
+    assert devices["K1"]["kind"] == "K"
+    assert devices["W1"]["kind"] == "W"
+    assert any(
+        edge["source"] == "device:F1" and edge["target"] == "net:out_p" and edge["role"] == "OUTP"
+        for edge in payload["edges"]
+    )
+    assert any(
+        edge["source"] == "device:K1" and edge["target"] == "net:L1" and edge["role"] == "L1"
+        for edge in payload["edges"]
+    )
+    assert any(edge["target"] == "net:in_p" for edge in payload["edges"])
+
+
 def test_export_graph_graphml_smoke() -> None:
     result = CliRunner().invoke(
         main,

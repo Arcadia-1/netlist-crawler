@@ -20,6 +20,13 @@ PIN_ROLES: dict[str, tuple[str, ...]] = {
     "I": ("P", "N"),
     "D": ("A", "K"),
     "Q": ("C", "B", "E", "S"),
+    "B": ("P", "N"),
+    "E": ("OUTP", "OUTN", "INP", "INN"),
+    "F": ("OUTP", "OUTN"),
+    "G": ("OUTP", "OUTN", "INP", "INN"),
+    "H": ("OUTP", "OUTN"),
+    "K": ("L1", "L2"),
+    "W": ("P", "N"),
 }
 
 _INSTANCE_WITH_PARENS = re.compile(r"^(\S+)\s*\((.*?)\)\s*(.*)$")
@@ -1069,7 +1076,7 @@ def _parse_device_line(line: str) -> Device | None:
         return None
     nets = tokens[1:1 + len(roles)]
     model_idx = 1 + len(roles)
-    model = tokens[model_idx] if model_idx < len(tokens) and "=" not in tokens[model_idx] else ""
+    model = _primitive_model(tokens, prefix, model_idx)
     return Device(
         name=name,
         kind=prefix,
@@ -1079,6 +1086,14 @@ def _parse_device_line(line: str) -> Device | None:
         params=params,
         raw=line,
     )
+
+
+def _primitive_model(tokens: list[str], prefix: str, model_idx: int) -> str:
+    if model_idx >= len(tokens) or "=" in tokens[model_idx]:
+        return ""
+    if prefix in {"F", "H", "K"}:
+        return ""
+    return tokens[model_idx]
 
 
 def _parse_named_x_instance(tokens: list[str]) -> Device | None:
