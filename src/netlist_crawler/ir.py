@@ -133,6 +133,25 @@ def export_ir(
             for index, device in enumerate(circuit.devices)
             for role, net in device.pins.items()
         ],
+        "hierarchy": {
+            "instances": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "kind": item.kind,
+                    "definition": item.definition,
+                    "scope": item.scope,
+                    "expanded": item.expanded,
+                    "instance_path": item.instance_path,
+                    "port_map": item.port_map,
+                    "member_prefix": item.member_prefix,
+                    "members": item.members,
+                    "pins": item.pins,
+                    "raw": item.raw,
+                }
+                for item in circuit.hierarchy_instances
+            ]
+        },
         "annotations": annotations,
     }
 
@@ -204,6 +223,8 @@ def validate_ir(ir: dict) -> dict:
         warnings.append(_issue("missing_edge", f"pin has no matching edge: {ref!r}"))
     for ref in sorted(edge_refs - pin_refs):
         warnings.append(_issue("extra_edge", f"edge has no matching instance pin: {ref!r}"))
+
+    _validate_hierarchy(ir.get("hierarchy", {}), instance_ids, net_ids, errors, warnings)
 
     for annotation in annotations:
         _validate_annotation(annotation, instance_ids, net_ids, errors)
@@ -385,6 +406,35 @@ def _ids(items: list[dict], kind: str, errors: list[dict]) -> set[str]:
             errors.append(_issue("duplicate_id", f"duplicate {kind} id {item_id!r}"))
         seen.add(item_id)
     return seen
+
+
+def _validate_hierarchy(
+    hierarchy: dict,
+    instance_ids: set[str],
+    net_ids: set[str],
+    errors: list[dict],
+    warnings: list[dict],
+) -> None:
+    seen: set[str] = set()
+    items = hierarchy.get("instances", []) if isinstance(hierarchy, dict) else []
+    for item in items:
+        item_id = item.get("id")
+        if not item_id:
+            errors.append(_issue("hierarchy_reference", "hierarchy instance missing id"))
+            continue
+        if item_id in seen:
+            errors.append(_issue("duplicate_id", f"duplicate hierarchy instance id {item_id!r}"))
+        seen.add(item_id)
+        members = item.get("members", {}) or {}
+        for device in members.get("devices", []):
+            if device not in instance_ids:
+                errors.append(_issue("hierarchy_reference", f"unknown member device {device!r}", hierarchy=item_id))
+        for net in members.get("nets", []):
+            if net not in net_ids:
+                errors.append(_issue("hierarchy_reference", f"unknown member net {net!r}", hierarchy=item_id))
+        for port, net in (item.get("port_map", {}) or {}).items():
+            if net not in net_ids:
+                warnings.append(_issue("hierarchy_port_map", f"port {port!r} maps to unobserved net {net!r}", hierarchy=item_id))
 
 
 def _validate_annotation(

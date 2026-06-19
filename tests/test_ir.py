@@ -27,6 +27,42 @@ def test_exported_ir_validates_and_rebuilds_circuit() -> None:
     assert nc.classify_path(circuit, "vinp", "voutp")["path_type"] == "signal_path"
 
 
+def test_export_ir_preserves_expanded_hierarchy_port_map(tmp_path: Path) -> None:
+    netlist = tmp_path / "hierarchy.sp"
+    netlist.write_text(
+        """
+        .subckt gain_stage IN OUT VDD VSS
+        M1 OUT IN tail VSS nch
+        M2 OUT tail VDD VDD pch
+        .ends gain_stage
+        .subckt TOP vin vout vdd vss
+        XAMP vin vout vdd vss gain_stage
+        .ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    ir = nc.export_ir(netlist, topcell="TOP", expand_depth=1)
+
+    assert [item["id"] for item in ir["instances"]] == ["XAMP.M1", "XAMP.M2"]
+    hierarchy = ir["hierarchy"]["instances"]
+    assert len(hierarchy) == 1
+    xamp = hierarchy[0]
+    assert xamp["id"] == "XAMP"
+    assert xamp["name"] == "XAMP"
+    assert xamp["definition"] == "gain_stage"
+    assert xamp["scope"] == "TOP"
+    assert xamp["expanded"] is True
+    assert xamp["instance_path"] == ["XAMP"]
+    assert xamp["pins"] == {"1": "vin", "2": "vout", "3": "vdd", "4": "vss"}
+    assert xamp["port_map"] == {"IN": "vin", "OUT": "vout", "VDD": "vdd", "VSS": "vss"}
+    assert xamp["member_prefix"] == "XAMP."
+    assert xamp["members"]["devices"] == ["XAMP.M1", "XAMP.M2"]
+    assert xamp["members"]["nets"] == ["XAMP.tail"]
+    assert nc.validate_ir(ir)["valid"] is True
+
+
 def test_ir_without_rule_annotations_reports_missing_coverage() -> None:
     ir = nc.export_ir(Path("examples/simple_diff_pair.sp"), include_rule_annotations=False)
 
@@ -120,6 +156,29 @@ def test_export_ir_disambiguates_duplicate_instance_names(tmp_path: Path) -> Non
     assert [item["name"] for item in ir["instances"]] == ["XA2", "XA2"]
     assert {edge["device"] for edge in ir["edges"]} == set(ids)
     assert nc.validate_ir(ir)["valid"] is True
+
+
+def test_validate_ir_rejects_bad_hierarchy_member_reference(tmp_path: Path) -> None:
+    netlist = tmp_path / "hierarchy.sp"
+    netlist.write_text(
+        """
+        .subckt child IN OUT
+        M1 OUT IN 0 0 nch
+        .ends child
+        .subckt TOP A Y
+        X1 A Y child
+        .ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    ir = nc.export_ir(netlist, topcell="TOP", expand_depth=1)
+    ir["hierarchy"]["instances"][0]["members"]["devices"].append("X1.MISSING")
+
+    result = nc.validate_ir(ir)
+
+    assert result["valid"] is False
+    assert any(error["kind"] == "hierarchy_reference" for error in result["errors"])
 
 
 def test_validate_ir_rejects_bad_annotation_reference() -> None:

@@ -63,6 +63,24 @@ class SubcktDef:
 
 
 @dataclass
+class HierarchyInstance:
+    """A subcircuit instance boundary fact preserved during expansion."""
+
+    id: str
+    name: str
+    kind: str
+    definition: str
+    scope: str
+    expanded: bool
+    instance_path: list[str]
+    port_map: dict[str, str]
+    member_prefix: str
+    members: dict[str, list[str]] = field(default_factory=dict)
+    pins: dict[str, str] = field(default_factory=dict)
+    raw: str = ""
+
+
+@dataclass
 class StructuralCircuit:
     """Device/net graph extracted from a SPICE-like netlist."""
 
@@ -74,6 +92,7 @@ class StructuralCircuit:
     parameters: dict[str, str] = field(default_factory=dict)
     expanded: bool = False
     expand_depth: int = 0
+    hierarchy_instances: list[HierarchyInstance] = field(default_factory=list)
 
     def nets(self) -> dict[str, list[str]]:
         nets: dict[str, list[str]] = defaultdict(list)
@@ -135,6 +154,25 @@ class StructuralCircuit:
                 for device in self.devices
             ],
             "nets": self.nets(),
+            "hierarchy": {
+                "instances": [
+                    {
+                        "id": item.id,
+                        "name": item.name,
+                        "kind": item.kind,
+                        "definition": item.definition,
+                        "scope": item.scope,
+                        "expanded": item.expanded,
+                        "instance_path": item.instance_path,
+                        "port_map": item.port_map,
+                        "member_prefix": item.member_prefix,
+                        "members": item.members,
+                        "pins": item.pins,
+                        "raw": item.raw,
+                    }
+                    for item in self.hierarchy_instances
+                ]
+            },
         }
 
 
@@ -161,13 +199,16 @@ def parse_structural_netlist(
         if definition is None:
             return circuit
         if expand_depth > 0:
+            hierarchy: list[HierarchyInstance] = []
             circuit.devices = _expand_subckt(
                 subckts,
                 definition,
                 prefix="",
                 net_map={},
                 depth=expand_depth,
+                hierarchy=hierarchy,
             )
+            circuit.hierarchy_instances = hierarchy
             return circuit
         circuit.devices = [
             _copy_device(device, scope=definition.name)
@@ -247,6 +288,7 @@ def _expand_subckt(
     prefix: str,
     net_map: dict[str, str],
     depth: int,
+    hierarchy: list[HierarchyInstance],
 ) -> list[Device]:
     expanded: list[Device] = []
     for device in definition.devices:
@@ -256,18 +298,48 @@ def _expand_subckt(
         }
         hier_name = f"{prefix}.{device.name}" if prefix else device.name
         child_def = subckts.get(device.model)
-        if device.kind == "X" and child_def is not None and depth > 0:
+        if device.kind == "X" and child_def is not None:
             child_map = _instance_port_map(child_def, device, net_map=net_map, prefix=prefix)
-            expanded.extend(
-                _expand_subckt(
+            is_expanded = depth > 0
+            member_devices: list[str] = []
+            member_nets: list[str] = []
+            if is_expanded:
+                child_devices = _expand_subckt(
                     subckts,
                     child_def,
                     prefix=hier_name,
                     net_map=child_map,
                     depth=depth - 1,
+                    hierarchy=hierarchy,
+                )
+                expanded.extend(child_devices)
+                member_devices = [child.name for child in child_devices]
+                member_nets = sorted(
+                    {
+                        net
+                        for child in child_devices
+                        for net in child.pins.values()
+                        if net.startswith(f"{hier_name}.")
+                    }
+                )
+            hierarchy.append(
+                HierarchyInstance(
+                    id=hier_name,
+                    name=device.name,
+                    kind=device.kind,
+                    definition=child_def.name,
+                    scope=definition.name,
+                    expanded=is_expanded,
+                    instance_path=hier_name.split("."),
+                    port_map=child_map,
+                    member_prefix=f"{hier_name}.",
+                    members={"devices": member_devices, "nets": member_nets},
+                    pins=mapped_pins,
+                    raw=device.raw,
                 )
             )
-            continue
+            if is_expanded:
+                continue
         expanded.append(
             Device(
                 name=hier_name,
