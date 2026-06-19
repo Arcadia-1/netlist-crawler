@@ -268,6 +268,7 @@ def neighborhood(
     depth: int,
     *,
     exclude_nets: set[str] | None = None,
+    max_degree: int | None = None,
 ) -> dict:
     """Return a bounded bipartite neighborhood around a net."""
     exclude_nets = exclude_nets or set()
@@ -286,6 +287,8 @@ def neighborhood(
             continue
         if node != start and _is_excluded_net_node(node, exclude_nets):
             continue
+        if node != start and _is_high_degree_net_node(adj, node, max_degree):
+            continue
         for nb in sorted(adj.get(node, ())):
             if nb in seen:
                 continue
@@ -294,7 +297,10 @@ def neighborhood(
                 device_names.add(nb[1:])
             elif nb.startswith("#"):
                 net_names.add(nb[1:])
-            if not _is_excluded_net_node(nb, exclude_nets):
+            if (
+                not _is_excluded_net_node(nb, exclude_nets)
+                and not _is_high_degree_net_node(adj, nb, max_degree)
+            ):
                 q.append((nb, dist + 1))
 
     devices = circuit.device_by_name()
@@ -321,6 +327,7 @@ def net_path(
     target: str,
     *,
     exclude_nets: set[str] | None = None,
+    max_degree: int | None = None,
 ) -> dict:
     """Find the shortest structural path between two nets."""
     exclude_nets = exclude_nets or set()
@@ -345,6 +352,8 @@ def net_path(
             if nb in parent:
                 continue
             if nb not in {start, goal} and _is_excluded_net_node(nb, exclude_nets):
+                continue
+            if nb not in {start, goal} and _is_high_degree_net_node(adj, nb, max_degree):
                 continue
             parent[nb] = node
             q.append(nb)
@@ -737,6 +746,19 @@ def _display_node(node: str) -> str:
 
 def _is_excluded_net_node(node: str, exclude_nets: set[str]) -> bool:
     return node.startswith("#") and node[1:] in exclude_nets
+
+
+def _is_high_degree_net_node(
+    adj: dict[str, set[str]],
+    node: str,
+    max_degree: int | None,
+) -> bool:
+    return (
+        max_degree is not None
+        and max_degree >= 0
+        and node.startswith("#")
+        and len(adj.get(node, ())) > max_degree
+    )
 
 
 def _include_path(line: str, *, base_dir: Path) -> Path | None:

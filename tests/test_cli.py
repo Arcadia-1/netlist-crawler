@@ -318,6 +318,56 @@ def test_path_can_exclude_common_rail_traversal() -> None:
     assert payload["reason"] == "disconnected"
 
 
+def test_path_can_exclude_high_degree_intermediate_nets() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "path",
+            "examples/rail_bridge.sp",
+            "--topcell",
+            "rail_bridge",
+            "--from",
+            "a",
+            "--to",
+            "b",
+            "--max-degree",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["found"] is False
+    assert payload["reason"] == "disconnected"
+
+
+def test_neighborhood_keeps_high_degree_net_visible_without_expanding() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "neighborhood",
+            "examples/rail_bridge.sp",
+            "--topcell",
+            "rail_bridge",
+            "--net",
+            "a",
+            "--depth",
+            "3",
+            "--max-degree",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert "vdd" in payload["nets"]
+    assert {device["name"] for device in payload["devices"]} == {"M1"}
+
+
 def test_detect_reports_initial_semantic_patterns() -> None:
     result = CliRunner().invoke(
         main,

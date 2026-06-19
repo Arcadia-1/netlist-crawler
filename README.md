@@ -41,6 +41,7 @@ netlist-crawler summarize examples/two_subckts.sp --topcell bias_block --format 
 netlist-crawler summarize examples/include_top.sp --topcell include_top --expand-depth 1 --format json
 netlist-crawler summarize examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
 netlist-crawler neighborhood examples/simple_diff_pair.sp --net vout --depth 2
+netlist-crawler neighborhood examples/rail_bridge.sp --topcell rail_bridge --net a --depth 3 --max-degree 1
 netlist-crawler path examples/simple_diff_pair.sp --from vinp --to vout
 netlist-crawler path examples/rail_bridge.sp --topcell rail_bridge --from a --to b --exclude-common-nets
 netlist-crawler detect examples/simple_diff_pair.sp --pattern diff-pair
@@ -54,9 +55,10 @@ subcircuit selection, and support relative `.include` files plus
 `--expand-depth` for hierarchical instance expansion, including simple
 named-port X instances. All structural commands support `--format json` for
 agent use. Path and neighborhood traversal can exclude common rails or explicit
-project nets with `--exclude-common-nets` and `--exclude-net`. The semantic
-detector and device explanation commands include first-pass rules for
-differential pairs, current mirrors, tail current sources, and active loads,
+project nets with `--exclude-common-nets` and `--exclude-net`; `--max-degree`
+keeps very high-degree nets visible without letting them dominate traversal.
+The semantic detector and device explanation commands include first-pass rules
+for differential pairs, current mirrors, tail current sources, and active loads,
 with evidence and confidence fields in JSON output.
 
 `benchmark` runs JSON task files that assert expected structural and semantic

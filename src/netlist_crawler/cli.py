@@ -112,6 +112,7 @@ def summarize(
 @click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
 @click.option("--exclude-common-nets", is_flag=True, help="Do not traverse common rails.")
 @click.option("--exclude-net", multiple=True, help="Net to keep visible but not traverse.")
+@click.option("--max-degree", type=int, help="Keep high-degree nets visible but do not expand them.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
 def neighborhood(
     netlist: Path,
@@ -121,6 +122,7 @@ def neighborhood(
     expand_depth: int,
     exclude_common_nets: bool,
     exclude_net: tuple[str, ...],
+    max_degree: int | None,
     output_format: str,
 ) -> None:
     """Inspect the neighborhood around a net."""
@@ -130,6 +132,7 @@ def neighborhood(
         net_name,
         depth,
         exclude_nets=_exclude_nets(exclude_common_nets, exclude_net),
+        max_degree=max_degree,
     )
     if output_format == "json":
         click.echo(dumps_json(result))
@@ -159,6 +162,7 @@ def neighborhood(
 @click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
 @click.option("--exclude-common-nets", is_flag=True, help="Do not traverse common rails.")
 @click.option("--exclude-net", multiple=True, help="Net to exclude from traversal.")
+@click.option("--max-degree", type=int, help="Exclude high-degree intermediate nets from path search.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
 def path(
     netlist: Path,
@@ -168,6 +172,7 @@ def path(
     expand_depth: int,
     exclude_common_nets: bool,
     exclude_net: tuple[str, ...],
+    max_degree: int | None,
     output_format: str,
 ) -> None:
     """Find likely connectivity paths between two nets."""
@@ -177,6 +182,7 @@ def path(
         source,
         target,
         exclude_nets=_exclude_nets(exclude_common_nets, exclude_net),
+        max_degree=max_degree,
     )
     if output_format == "json":
         click.echo(dumps_json(result))
