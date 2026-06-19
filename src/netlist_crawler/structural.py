@@ -1032,15 +1032,23 @@ def _logical_lines(path: Path, *, seen: set[Path] | None = None) -> Iterable[str
         line = raw.strip()
         if not line or line.startswith(("*", "//", ";")):
             continue
+        continued = line.endswith("\\")
+        if continued:
+            line = line[:-1].rstrip()
         if line.startswith("+"):
             current += " " + line[1:].strip()
+        elif current:
+            current += " " + line
+        else:
+            current = line
+        if continued:
             continue
         if current:
             yield current
             include = _include_path(current, base_dir=path.parent)
             if include and include.is_file():
                 yield from _logical_lines(include, seen=seen)
-        current = line
+        current = ""
     if current:
         yield current
         include = _include_path(current, base_dir=path.parent)
@@ -1084,6 +1092,10 @@ def _parse_device_line(line: str, *, known_subckts: set[str] | None = None) -> D
             raw=line,
         )
 
+    parenthesized = _parse_parenthesized_primitive(line, params)
+    if parenthesized is not None:
+        return parenthesized
+
     roles = PIN_ROLES.get(prefix)
     if roles is None:
         return None
@@ -1098,6 +1110,32 @@ def _parse_device_line(line: str, *, known_subckts: set[str] | None = None) -> D
         scope="",
         model=model,
         pins={role: net for role, net in zip(roles, nets)},
+        params=params,
+        raw=line,
+    )
+
+
+def _parse_parenthesized_primitive(line: str, params: dict[str, str]) -> Device | None:
+    match = _INSTANCE_WITH_PARENS.match(line)
+    if not match:
+        return None
+    name, pins, rest = match.groups()
+    prefix = name[0].upper()
+    roles = PIN_ROLES.get(prefix)
+    if roles is None or prefix == "X":
+        return None
+    pin_tokens = pins.split()
+    if len(pin_tokens) < len(roles):
+        return None
+    rest_tokens = rest.split()
+    model = _primitive_model([name, *pin_tokens, *rest_tokens], prefix, 1 + len(pin_tokens))
+    pin_roles = list(roles) + [str(index) for index in range(len(roles) + 1, len(pin_tokens) + 1)]
+    return Device(
+        name=name,
+        kind=prefix,
+        scope="",
+        model=model,
+        pins={role: net for role, net in zip(pin_roles, pin_tokens)},
         params=params,
         raw=line,
     )

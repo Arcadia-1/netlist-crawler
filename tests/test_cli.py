@@ -679,6 +679,55 @@ def test_export_graph_preserves_controlled_and_coupled_devices(tmp_path) -> None
     assert any(edge["target"] == "net:in_p" for edge in payload["edges"])
 
 
+def test_spectre_parenthesized_multi_terminal_mos_ignores_params(tmp_path) -> None:
+    netlist = tmp_path / "multi_terminal_mos.scs"
+    netlist.write_text(
+        """
+        simulator lang=spectre
+        subckt OR3D1A
+        M6 (Z net21 vss vss vdd SUB) n50_iso_ckt w=(900n) l=600n \\
+            mr=(1) nf=1 as=391.5f ad=391.5f
+        ends OR3D1A
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary_result = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "OR3D1A", "--format", "json"],
+    )
+    assert summary_result.exit_code == 0
+    summary = json.loads(summary_result.output)["summary"]
+    assert summary["device_kinds"] == {"M": 1}
+    assert summary["devices"] == 1
+    assert summary["nets"] == 5
+    assert {item["net"] for item in summary["top_nets"]} == {"Z", "net21", "vss", "vdd", "SUB"}
+
+    graph_result = CliRunner().invoke(
+        main,
+        ["export-graph", str(netlist), "--topcell", "OR3D1A", "--format", "json"],
+    )
+    assert graph_result.exit_code == 0
+    graph = json.loads(graph_result.output)
+    device = next(node for node in graph["nodes"] if node["type"] == "device")
+    assert device["name"] == "M6"
+    assert device["model"] == "n50_iso_ckt"
+    pins = {
+        edge["role"]: edge["target"].removeprefix("net:")
+        for edge in graph["edges"]
+        if edge["source"] == "device:M6"
+    }
+    assert pins == {
+        "D": "Z",
+        "G": "net21",
+        "S": "vss",
+        "B": "vss",
+        "5": "vdd",
+        "6": "SUB",
+    }
+
+
 def test_dollar_pins_x_instances_use_named_port_mapping(tmp_path) -> None:
     netlist = tmp_path / "dollar_pins.sp"
     netlist.write_text(
