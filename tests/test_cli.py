@@ -25,6 +25,50 @@ def test_summarize_json_on_simple_diff_pair() -> None:
     assert payload["nets"]["tail"] == ["M1.S", "M2.S", "M3.D"]
 
 
+def test_summarize_can_restrict_to_topcell() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            "examples/two_subckts.sp",
+            "--topcell",
+            "bias_block",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["summary"]["topcell"] == "bias_block"
+    assert payload["summary"]["subcircuits"] == ["gain_stage", "bias_block"]
+    assert payload["summary"]["device_kinds"] == {"M": 1, "R": 1}
+    assert {device["scope"] for device in payload["devices"]} == {"bias_block"}
+
+
+def test_topcell_selection_prevents_cross_subckt_paths() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "path",
+            "examples/two_subckts.sp",
+            "--topcell",
+            "gain_stage",
+            "--from",
+            "vin",
+            "--to",
+            "vdd",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["found"] is False
+    assert payload["reason"] == "missing endpoint"
+
+
 def test_neighborhood_reports_adjacent_devices() -> None:
     result = CliRunner().invoke(
         main,

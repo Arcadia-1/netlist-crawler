@@ -30,6 +30,7 @@ class Device:
 
     name: str
     kind: str
+    scope: str = ""
     model: str = ""
     pins: dict[str, str] = field(default_factory=dict)
     params: dict[str, str] = field(default_factory=dict)
@@ -41,6 +42,8 @@ class StructuralCircuit:
     """Device/net graph extracted from a SPICE-like netlist."""
 
     source: str
+    topcell: str = ""
+    subcircuits: list[str] = field(default_factory=list)
     devices: list[Device] = field(default_factory=list)
     directives: list[str] = field(default_factory=list)
 
@@ -73,6 +76,8 @@ class StructuralCircuit:
         )
         return {
             "source": self.source,
+            "topcell": self.topcell,
+            "subcircuits": self.subcircuits,
             "devices": len(self.devices),
             "nets": len(nets),
             "directives": len(self.directives),
@@ -91,6 +96,7 @@ class StructuralCircuit:
                 {
                     "name": device.name,
                     "kind": device.kind,
+                    "scope": device.scope,
                     "model": device.model,
                     "pins": device.pins,
                     "params": device.params,
@@ -101,18 +107,41 @@ class StructuralCircuit:
         }
 
 
-def parse_structural_netlist(path: Path) -> StructuralCircuit:
+def parse_structural_netlist(path: Path, *, topcell: str | None = None) -> StructuralCircuit:
     """Parse a pragmatic subset of SPICE/Spectre netlist structure."""
-    circuit = StructuralCircuit(source=str(path))
+    circuit = StructuralCircuit(source=str(path), topcell=topcell or "")
+    current_subckt = ""
     for line in _logical_lines(path):
         stripped = line.strip()
         if not stripped:
             continue
+        subckt_name = _subckt_name(stripped)
+        if subckt_name:
+            current_subckt = subckt_name
+            circuit.subcircuits.append(subckt_name)
+            circuit.directives.append(stripped)
+            continue
+        if _is_ends(stripped):
+            circuit.directives.append(stripped)
+            current_subckt = ""
+            continue
         if stripped.startswith(".") or stripped.lower().startswith(("simulator ", "include ")):
             circuit.directives.append(stripped)
             continue
+        if topcell and current_subckt != topcell:
+            continue
         device = _parse_device_line(stripped)
         if device is not None:
+            if current_subckt:
+                device = Device(
+                    name=device.name,
+                    kind=device.kind,
+                    scope=current_subckt,
+                    model=device.model,
+                    pins=device.pins,
+                    params=device.params,
+                    raw=device.raw,
+                )
             circuit.devices.append(device)
     return circuit
 
@@ -383,6 +412,7 @@ def _parse_device_line(line: str) -> Device | None:
         return Device(
             name=name,
             kind="X",
+            scope="",
             model=model,
             pins={str(i + 1): net for i, net in enumerate(nets)},
             params=params,
@@ -400,6 +430,7 @@ def _parse_device_line(line: str) -> Device | None:
     return Device(
         name=name,
         kind=prefix,
+        scope="",
         model=model,
         pins={role: net for role, net in zip(roles, nets)},
         params=params,
@@ -440,3 +471,15 @@ def _display_node(node: str) -> str:
     if node.startswith("@"):
         return node[1:]
     return node
+
+
+def _subckt_name(line: str) -> str:
+    tokens = line.split()
+    if len(tokens) >= 2 and tokens[0].lower() in {".subckt", "subckt"}:
+        return tokens[1]
+    return ""
+
+
+def _is_ends(line: str) -> bool:
+    token = line.split(maxsplit=1)[0].lower()
+    return token in {".ends", "ends"}

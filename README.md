@@ -33,6 +33,7 @@ separate project.
 
 ```bash
 netlist-crawler summarize examples/simple_diff_pair.sp
+netlist-crawler summarize examples/two_subckts.sp --topcell bias_block --format json
 netlist-crawler neighborhood examples/simple_diff_pair.sp --net vout --depth 2
 netlist-crawler path examples/simple_diff_pair.sp --from vinp --to vout
 netlist-crawler detect examples/simple_diff_pair.sp --pattern diff-pair
@@ -40,10 +41,11 @@ netlist-crawler explain examples/simple_diff_pair.sp --device M1
 ```
 
 `summarize`, `neighborhood`, and `path` currently operate on a lightweight
-SPICE-like structural parser and support `--format json` for agent use. The
-semantic detector and device explanation commands include first-pass rules for
-differential pairs, current mirrors, and tail current sources, with evidence and
-confidence fields in JSON output.
+SPICE-like structural parser, support `--topcell` for subcircuit selection, and
+support `--format json` for agent use. The semantic detector and device
+explanation commands include first-pass rules for differential pairs, current
+mirrors, and tail current sources, with evidence and confidence fields in JSON
+output.
 
 The post-layout parasitic analysis engine is also available through:
 
