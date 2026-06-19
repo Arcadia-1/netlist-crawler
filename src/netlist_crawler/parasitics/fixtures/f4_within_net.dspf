@@ -1,0 +1,23 @@
+*|DSPF 1.5
+*|DESIGN "F4_DUT"
+*|GROUND_NET VSS
+* within-net pin-to-pin R anchor, DSPF packaging of fixture F4.
+* Exercises the DSPF-specific paths the .scs fixtures cannot:
+*   - net:subnode node naming (VREFN:1 ..)
+*   - *|NET / *|S blocks driving the subnode -> canonical-net alias
+*   - X-prefixed device lines (no parens) with trailing k=v params
+* One logical net VREFN split by R into 4 subnodes, a MOS gate on each.
+.subckt F4_DUT
+*|NET VREFN 0.0
+*|S (VREFN:1)
+*|S (VREFN:2)
+*|S (VREFN:3)
+*|S (VREFN:4)
+r_1 VREFN:1 VREFN:2 1.0
+r_2 VREFN:2 VREFN:3 2.0
+r_3 VREFN:3 VREFN:4 3.0
+XM1 d1 VREFN:1 s1 b1 nch_mac W=1u L=28n
+XM2 d2 VREFN:2 s2 b2 nch_mac W=1u L=28n
+XM3 d3 VREFN:3 s3 b3 nch_mac W=1u L=28n
+XM4 d4 VREFN:4 s4 b4 nch_mac W=1u L=28n
+.ends

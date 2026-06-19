@@ -1,0 +1,12 @@
+*|DSPF 1.5
+*|DESIGN "F2_DUT"
+*|GROUND_NET VSS
+* Diff-pair with coupling, DSPF packaging of fixture F2.  Two isolated
+* R half-chains (each 5+5=10) bridged only by a Cc → DC-isolated halves.
+.subckt F2_DUT nIP nIN nOP nON
+r_IP_A nIP nA 5.0
+r_A_OP nA nOP 5.0
+r_IN_B nIN nB 5.0
+r_B_ON nB nON 5.0
+cc_A_B nA nB 1e-15
+.ends

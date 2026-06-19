@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "netlist-crawler"
+version = "0.1.0"
+description = "Semantic static analysis CLI for LLM-assisted analog circuit understanding."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Token Zhang" }
+]
+dependencies = [
+  "click>=8.1",
+]
+
+[project.optional-dependencies]
+parasitics = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+]
+test = [
+  "pytest>=7",
+]
+
+[project.scripts]
+netlist-crawler = "netlist_crawler.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/netlist_crawler"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

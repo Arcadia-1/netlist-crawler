@@ -1,0 +1,11 @@
+*|DSPF 1.5
+*|DESIGN "F1_DUT"
+*|GROUND_NET VSS
+* RC ladder, DSPF packaging of fixture F1.  Same topology / answers as
+* f1_rc_ladder.flat.scs:  n1 -[10]- n2 -[20]- n3 -[30]- n4, Cg(n2)=1f.
+.subckt F1_DUT n1 n4
+r_1 n1 n2 10.0
+r_2 n2 n3 20.0
+r_3 n3 n4 30.0
+ci_n2_gnd n2 VSS 1e-15
+.ends
