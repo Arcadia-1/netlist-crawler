@@ -22,6 +22,7 @@ PIN_ROLES: dict[str, tuple[str, ...]] = {
 }
 
 _INSTANCE_WITH_PARENS = re.compile(r"^(\S+)\s*\((.*?)\)\s*(.*)$")
+GLOBAL_NETS = {"0", "gnd", "GND", "vss", "VSS", "vdd", "VDD", "vss!", "vdd!"}
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,15 @@ class Device:
 
 
 @dataclass
+class SubcktDef:
+    """A parsed subcircuit definition."""
+
+    name: str
+    ports: list[str] = field(default_factory=list)
+    devices: list[Device] = field(default_factory=list)
+
+
+@dataclass
 class StructuralCircuit:
     """Device/net graph extracted from a SPICE-like netlist."""
 
@@ -46,6 +56,8 @@ class StructuralCircuit:
     subcircuits: list[str] = field(default_factory=list)
     devices: list[Device] = field(default_factory=list)
     directives: list[str] = field(default_factory=list)
+    expanded: bool = False
+    expand_depth: int = 0
 
     def nets(self) -> dict[str, list[str]]:
         nets: dict[str, list[str]] = defaultdict(list)
@@ -78,6 +90,8 @@ class StructuralCircuit:
             "source": self.source,
             "topcell": self.topcell,
             "subcircuits": self.subcircuits,
+            "expanded": self.expanded,
+            "expand_depth": self.expand_depth,
             "devices": len(self.devices),
             "nets": len(nets),
             "directives": len(self.directives),
@@ -107,43 +121,125 @@ class StructuralCircuit:
         }
 
 
-def parse_structural_netlist(path: Path, *, topcell: str | None = None) -> StructuralCircuit:
+def parse_structural_netlist(
+    path: Path,
+    *,
+    topcell: str | None = None,
+    expand_depth: int = 0,
+) -> StructuralCircuit:
     """Parse a pragmatic subset of SPICE/Spectre netlist structure."""
-    circuit = StructuralCircuit(source=str(path), topcell=topcell or "")
+    subckts, top_devices, directives = _parse_netlist_model(path)
+    circuit = StructuralCircuit(
+        source=str(path),
+        topcell=topcell or "",
+        subcircuits=list(subckts),
+        directives=directives,
+        expanded=bool(topcell and expand_depth > 0),
+        expand_depth=expand_depth,
+    )
+
+    if topcell:
+        definition = subckts.get(topcell)
+        if definition is None:
+            return circuit
+        if expand_depth > 0:
+            circuit.devices = _expand_subckt(
+                subckts,
+                definition,
+                prefix="",
+                net_map={},
+                depth=expand_depth,
+            )
+            return circuit
+        circuit.devices = [
+            _copy_device(device, scope=definition.name)
+            for device in definition.devices
+        ]
+        return circuit
+
+    devices = list(top_devices)
+    for definition in subckts.values():
+        devices.extend(_copy_device(device, scope=definition.name) for device in definition.devices)
+    circuit.devices = devices
+    return circuit
+
+
+def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device], list[str]]:
+    subckts: dict[str, SubcktDef] = {}
+    top_devices: list[Device] = []
+    directives: list[str] = []
     current_subckt = ""
+    current_def: SubcktDef | None = None
     for line in _logical_lines(path):
         stripped = line.strip()
         if not stripped:
             continue
-        subckt_name = _subckt_name(stripped)
-        if subckt_name:
+        header = _subckt_header(stripped)
+        if header is not None:
+            subckt_name, ports = header
             current_subckt = subckt_name
-            circuit.subcircuits.append(subckt_name)
-            circuit.directives.append(stripped)
+            current_def = SubcktDef(name=subckt_name, ports=ports)
+            subckts[subckt_name] = current_def
+            directives.append(stripped)
             continue
         if _is_ends(stripped):
-            circuit.directives.append(stripped)
+            directives.append(stripped)
             current_subckt = ""
+            current_def = None
             continue
         if stripped.startswith(".") or stripped.lower().startswith(("simulator ", "include ")):
-            circuit.directives.append(stripped)
-            continue
-        if topcell and current_subckt != topcell:
+            directives.append(stripped)
             continue
         device = _parse_device_line(stripped)
-        if device is not None:
-            if current_subckt:
-                device = Device(
-                    name=device.name,
-                    kind=device.kind,
-                    scope=current_subckt,
-                    model=device.model,
-                    pins=device.pins,
-                    params=device.params,
-                    raw=device.raw,
+        if device is None:
+            continue
+        if current_def is None:
+            top_devices.append(device)
+            continue
+        current_def.devices.append(_copy_device(device, scope=current_subckt))
+    return subckts, top_devices, directives
+
+
+def _expand_subckt(
+    subckts: dict[str, SubcktDef],
+    definition: SubcktDef,
+    *,
+    prefix: str,
+    net_map: dict[str, str],
+    depth: int,
+) -> list[Device]:
+    expanded: list[Device] = []
+    for device in definition.devices:
+        mapped_pins = {
+            role: _map_net(net, prefix=prefix, net_map=net_map)
+            for role, net in device.pins.items()
+        }
+        hier_name = f"{prefix}.{device.name}" if prefix else device.name
+        child_def = subckts.get(device.model)
+        if device.kind == "X" and child_def is not None and depth > 0:
+            child_map = _instance_port_map(child_def, device, net_map=net_map, prefix=prefix)
+            expanded.extend(
+                _expand_subckt(
+                    subckts,
+                    child_def,
+                    prefix=hier_name,
+                    net_map=child_map,
+                    depth=depth - 1,
                 )
-            circuit.devices.append(device)
-    return circuit
+            )
+            continue
+        expanded.append(
+            Device(
+                name=hier_name,
+                kind=device.kind,
+                scope=definition.name,
+                model=device.model,
+                pins=mapped_pins,
+                params=device.params,
+                raw=device.raw,
+            )
+        )
+    return expanded
 
 
 def neighborhood(circuit: StructuralCircuit, net: str, depth: int) -> dict:
@@ -438,6 +534,48 @@ def _parse_device_line(line: str) -> Device | None:
     )
 
 
+def _copy_device(
+    device: Device,
+    *,
+    scope: str | None = None,
+    name: str | None = None,
+    pins: dict[str, str] | None = None,
+) -> Device:
+    return Device(
+        name=name or device.name,
+        kind=device.kind,
+        scope=device.scope if scope is None else scope,
+        model=device.model,
+        pins=device.pins if pins is None else pins,
+        params=device.params,
+        raw=device.raw,
+    )
+
+
+def _instance_port_map(
+    definition: SubcktDef,
+    instance: Device,
+    *,
+    net_map: dict[str, str],
+    prefix: str,
+) -> dict[str, str]:
+    mapped: dict[str, str] = {}
+    for idx, port in enumerate(definition.ports, start=1):
+        actual = instance.pins.get(str(idx))
+        if actual is None:
+            continue
+        mapped[port] = _map_net(actual, prefix=prefix, net_map=net_map)
+    return mapped
+
+
+def _map_net(net: str, *, prefix: str, net_map: dict[str, str]) -> str:
+    if net in net_map:
+        return net_map[net]
+    if not prefix or net in GLOBAL_NETS:
+        return net
+    return f"{prefix}.{net}"
+
+
 def _tokenize_instance(line: str) -> list[str]:
     match = _INSTANCE_WITH_PARENS.match(line)
     if not match:
@@ -473,11 +611,18 @@ def _display_node(node: str) -> str:
     return node
 
 
-def _subckt_name(line: str) -> str:
+def _subckt_header(line: str) -> tuple[str, list[str]] | None:
     tokens = line.split()
     if len(tokens) >= 2 and tokens[0].lower() in {".subckt", "subckt"}:
-        return tokens[1]
-    return ""
+        ports = []
+        for token in tokens[2:]:
+            if "=" in token:
+                break
+            if token.lower() in {"params:", "parameters:"}:
+                break
+            ports.append(token)
+        return tokens[1], ports
+    return None
 
 
 def _is_ends(line: str) -> bool:

@@ -69,6 +69,55 @@ def test_topcell_selection_prevents_cross_subckt_paths() -> None:
     assert payload["reason"] == "missing endpoint"
 
 
+def test_expand_depth_exposes_hierarchical_devices_and_local_nets() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            "examples/hierarchical_ota.sp",
+            "--topcell",
+            "ota_top",
+            "--expand-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["summary"]["expanded"] is True
+    assert payload["summary"]["devices"] == 5
+    assert "XCORE.M1" in {device["name"] for device in payload["devices"]}
+    assert payload["nets"]["XCORE.tail"] == ["XCORE.M1.S", "XCORE.M2.S", "XCORE.M3.D"]
+    assert "XLOAD.M4.D" in payload["nets"]["voutp"]
+
+
+def test_detect_works_on_expanded_hierarchy() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "detect",
+            "examples/hierarchical_ota.sp",
+            "--topcell",
+            "ota_top",
+            "--expand-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    diff_pair = next(
+        match for match in payload["matches"]
+        if match["pattern"] == "differential_pair"
+    )
+    assert diff_pair["devices"] == ["XCORE.M1", "XCORE.M2"]
+    assert diff_pair["evidence"]["shared_source"] == "XCORE.tail"
+
+
 def test_neighborhood_reports_adjacent_devices() -> None:
     result = CliRunner().invoke(
         main,

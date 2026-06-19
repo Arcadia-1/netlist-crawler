@@ -34,6 +34,7 @@ separate project.
 ```bash
 netlist-crawler summarize examples/simple_diff_pair.sp
 netlist-crawler summarize examples/two_subckts.sp --topcell bias_block --format json
+netlist-crawler summarize examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
 netlist-crawler neighborhood examples/simple_diff_pair.sp --net vout --depth 2
 netlist-crawler path examples/simple_diff_pair.sp --from vinp --to vout
 netlist-crawler detect examples/simple_diff_pair.sp --pattern diff-pair
@@ -42,7 +43,8 @@ netlist-crawler explain examples/simple_diff_pair.sp --device M1
 
 `summarize`, `neighborhood`, and `path` currently operate on a lightweight
 SPICE-like structural parser, support `--topcell` for subcircuit selection, and
-support `--format json` for agent use. The semantic detector and device
+support `--expand-depth` for hierarchical instance expansion. All structural
+commands support `--format json` for agent use. The semantic detector and device
 explanation commands include first-pass rules for differential pairs, current
 mirrors, and tail current sources, with evidence and confidence fields in JSON
 output.
@@ -62,8 +64,8 @@ netlist-crawler inject --help
 2. Add LLM-oriented brief output with evidence and confidence fields.
 3. Build evaluation tasks comparing LLM-only, raw-netlist, graph-tool, and
    semantic-tool workflows.
-4. Expand Spectre/SPICE syntax coverage around hierarchy, includes, and
-   project-specific net aliases.
+4. Expand Spectre/SPICE syntax coverage around includes, named port mapping,
+   parameters, and project-specific net aliases.
 
 ## Development
 

@@ -24,10 +24,16 @@ def main() -> None:
 @main.command()
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
-def summarize(netlist: Path, topcell: str | None, output_format: str) -> None:
+def summarize(
+    netlist: Path,
+    topcell: str | None,
+    expand_depth: int,
+    output_format: str,
+) -> None:
     """Summarize a netlist at a high level."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell)
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
     summary = circuit.summary()
     if output_format == "json":
         click.echo(dumps_json(circuit.to_json_dict()))
@@ -54,16 +60,18 @@ def summarize(netlist: Path, topcell: str | None, output_format: str) -> None:
 @click.option("--net", "net_name", required=True, help="Net to inspect.")
 @click.option("--depth", default=1, show_default=True, help="Traversal depth.")
 @click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
 def neighborhood(
     netlist: Path,
     net_name: str,
     depth: int,
     topcell: str | None,
+    expand_depth: int,
     output_format: str,
 ) -> None:
     """Inspect the neighborhood around a net."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell)
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
     result = structural_neighborhood(circuit, net_name, depth)
     if output_format == "json":
         click.echo(dumps_json(result))
@@ -90,16 +98,18 @@ def neighborhood(
 @click.option("--from", "source", required=True, help="Source net.")
 @click.option("--to", "target", required=True, help="Target net.")
 @click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
 def path(
     netlist: Path,
     source: str,
     target: str,
     topcell: str | None,
+    expand_depth: int,
     output_format: str,
 ) -> None:
     """Find likely connectivity paths between two nets."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell)
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
     result = net_path(circuit, source, target)
     if output_format == "json":
         click.echo(dumps_json(result))
@@ -114,10 +124,17 @@ def path(
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--pattern", default="all", show_default=True, help="Pattern to detect.")
 @click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
-def detect(netlist: Path, pattern: str, topcell: str | None, output_format: str) -> None:
+def detect(
+    netlist: Path,
+    pattern: str,
+    topcell: str | None,
+    expand_depth: int,
+    output_format: str,
+) -> None:
     """Detect analog semantic patterns."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell)
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
     try:
         hits = detect_semantics(circuit, pattern)
     except ValueError as exc:
@@ -141,10 +158,17 @@ def detect(netlist: Path, pattern: str, topcell: str | None, output_format: str)
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--device", required=True, help="Device name to explain.")
 @click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
+@click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
-def explain(netlist: Path, device: str, topcell: str | None, output_format: str) -> None:
+def explain(
+    netlist: Path,
+    device: str,
+    topcell: str | None,
+    expand_depth: int,
+    output_format: str,
+) -> None:
     """Explain the likely role of a device."""
-    circuit = parse_structural_netlist(netlist, topcell=topcell)
+    circuit = parse_structural_netlist(netlist, topcell=topcell, expand_depth=expand_depth)
     result = explain_device(circuit, device)
     if output_format == "json":
         click.echo(dumps_json(result))
