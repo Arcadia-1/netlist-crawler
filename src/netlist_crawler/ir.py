@@ -202,6 +202,7 @@ def validate_ir(ir: dict) -> dict:
     annotations = ir.get("annotations", [])
     instance_ids = _ids(instances, "instance", errors)
     net_ids = _ids(nets, "net", errors)
+    subckt_ids = _hierarchy_ids(ir.get("hierarchy", {}), errors)
 
     pin_refs = {
         (item.get("id"), role, net)
@@ -227,7 +228,7 @@ def validate_ir(ir: dict) -> dict:
     _validate_hierarchy(ir.get("hierarchy", {}), instance_ids, net_ids, errors, warnings)
 
     for annotation in annotations:
-        _validate_annotation(annotation, instance_ids, net_ids, errors)
+        _validate_annotation(annotation, instance_ids, net_ids, subckt_ids, errors)
 
     return {
         "valid": not errors,
@@ -408,6 +409,11 @@ def _ids(items: list[dict], kind: str, errors: list[dict]) -> set[str]:
     return seen
 
 
+def _hierarchy_ids(hierarchy: dict, errors: list[dict]) -> set[str]:
+    items = hierarchy.get("instances", []) if isinstance(hierarchy, dict) else []
+    return _ids(items, "subckt", errors)
+
+
 def _validate_hierarchy(
     hierarchy: dict,
     instance_ids: set[str],
@@ -415,16 +421,11 @@ def _validate_hierarchy(
     errors: list[dict],
     warnings: list[dict],
 ) -> None:
-    seen: set[str] = set()
     items = hierarchy.get("instances", []) if isinstance(hierarchy, dict) else []
     for item in items:
         item_id = item.get("id")
         if not item_id:
-            errors.append(_issue("hierarchy_reference", "hierarchy instance missing id"))
             continue
-        if item_id in seen:
-            errors.append(_issue("duplicate_id", f"duplicate hierarchy instance id {item_id!r}"))
-        seen.add(item_id)
         members = item.get("members", {}) or {}
         for device in members.get("devices", []):
             if device not in instance_ids:
@@ -441,6 +442,7 @@ def _validate_annotation(
     annotation: dict,
     instance_ids: set[str],
     net_ids: set[str],
+    subckt_ids: set[str],
     errors: list[dict],
 ) -> None:
     target = annotation.get("target") or {}
@@ -452,6 +454,9 @@ def _validate_annotation(
     elif target_type == "net":
         if target_id not in net_ids:
             errors.append(_issue("annotation_reference", f"unknown net {target_id!r}", annotation=annotation.get("id")))
+    elif target_type == "subckt":
+        if target_id not in subckt_ids:
+            errors.append(_issue("annotation_reference", f"unknown subckt {target_id!r}", annotation=annotation.get("id")))
     elif target_type == "group":
         for member in target.get("members", []):
             member_type = member.get("type")
@@ -460,7 +465,9 @@ def _validate_annotation(
                 errors.append(_issue("annotation_reference", f"unknown group device {member_id!r}", annotation=annotation.get("id")))
             elif member_type == "net" and member_id not in net_ids:
                 errors.append(_issue("annotation_reference", f"unknown group net {member_id!r}", annotation=annotation.get("id")))
-            elif member_type not in {"device", "net"}:
+            elif member_type == "subckt" and member_id not in subckt_ids:
+                errors.append(_issue("annotation_reference", f"unknown group subckt {member_id!r}", annotation=annotation.get("id")))
+            elif member_type not in {"device", "net", "subckt"}:
                 errors.append(_issue("annotation_reference", f"unknown group member type {member_type!r}", annotation=annotation.get("id")))
     else:
         errors.append(_issue("annotation_reference", f"unknown target type {target_type!r}", annotation=annotation.get("id")))
@@ -526,13 +533,13 @@ def _labels_by_target(annotations: list[dict]) -> dict[tuple[str, str], set[str]
         target = annotation.get("target") or {}
         target_type = target.get("type")
         target_id = target.get("id")
-        if target_type in {"device", "net"} and target_id:
+        if target_type in {"device", "net", "subckt"} and target_id:
             labels[(target_type, target_id)].add(label)
         elif target_type == "group":
             for member in target.get("members", []):
                 member_type = member.get("type")
                 member_id = member.get("id")
-                if member_type in {"device", "net"} and member_id:
+                if member_type in {"device", "net", "subckt"} and member_id:
                     labels[(member_type, member_id)].add(label)
     return labels
 

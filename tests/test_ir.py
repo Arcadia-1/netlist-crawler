@@ -158,6 +158,80 @@ def test_export_ir_disambiguates_duplicate_instance_names(tmp_path: Path) -> Non
     assert nc.validate_ir(ir)["valid"] is True
 
 
+def test_validate_ir_accepts_subckt_annotation_target(tmp_path: Path) -> None:
+    netlist = tmp_path / "hierarchy.sp"
+    netlist.write_text(
+        """
+        .subckt child IN OUT
+        M1 OUT IN 0 0 nch
+        .ends child
+        .subckt TOP A Y
+        X1 A Y child
+        .ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    ir = nc.export_ir(netlist, topcell="TOP", expand_depth=1)
+    ir["annotations"].extend([
+        {
+            "id": "ann:test:subckt",
+            "target": {"type": "subckt", "id": "X1"},
+            "label": "gain_stage",
+            "status": "candidate",
+            "source": "workflow.agent",
+            "confidence": 0.8,
+            "evidence": {"definition": "child"},
+        },
+        {
+            "id": "ann:test:subckt-group",
+            "target": {
+                "type": "group",
+                "id": "group:test:X1",
+                "members": [{"type": "subckt", "id": "X1"}],
+            },
+            "label": "analog_block",
+            "status": "candidate",
+            "source": "workflow.agent",
+            "confidence": 0.8,
+            "evidence": {},
+        },
+    ])
+
+    assert nc.validate_ir(ir)["valid"] is True
+
+
+def test_validate_ir_rejects_bad_subckt_annotation_reference(tmp_path: Path) -> None:
+    netlist = tmp_path / "hierarchy.sp"
+    netlist.write_text(
+        """
+        .subckt child IN OUT
+        M1 OUT IN 0 0 nch
+        .ends child
+        .subckt TOP A Y
+        X1 A Y child
+        .ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    ir = nc.export_ir(netlist, topcell="TOP", expand_depth=1)
+    ir["annotations"].append({
+        "id": "ann:test:missing-subckt",
+        "target": {"type": "subckt", "id": "X2"},
+        "label": "gain_stage",
+        "status": "candidate",
+        "source": "workflow.agent",
+        "confidence": 0.8,
+        "evidence": {},
+    })
+
+    validation = nc.validate_ir(ir)
+
+    assert validation["valid"] is False
+    assert any(error["kind"] == "annotation_reference" for error in validation["errors"])
+
+
 def test_validate_ir_rejects_bad_hierarchy_member_reference(tmp_path: Path) -> None:
     netlist = tmp_path / "hierarchy.sp"
     netlist.write_text(
