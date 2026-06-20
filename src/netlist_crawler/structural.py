@@ -139,6 +139,10 @@ class StructuralCircuit:
         }
 
     def to_json_dict(self) -> dict:
+        hierarchy_instances = sorted(
+            self.hierarchy_instances,
+            key=lambda item: (len(item.instance_path), item.instance_path, item.id),
+        )
         return {
             "source": self.source,
             "summary": self.summary(),
@@ -170,7 +174,7 @@ class StructuralCircuit:
                         "pins": item.pins,
                         "raw": item.raw,
                     }
-                    for item in self.hierarchy_instances
+                    for item in hierarchy_instances
                 ]
             },
         }

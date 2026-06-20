@@ -80,6 +80,10 @@ def export_ir(
     device_ids = _unique_device_ids(circuit.devices)
     nets = _nets_with_device_ids(circuit, device_ids)
     annotations = _rule_annotations(circuit, device_ids=device_ids) if include_rule_annotations else []
+    hierarchy_instances = sorted(
+        circuit.hierarchy_instances,
+        key=lambda item: (len(item.instance_path), item.instance_path, item.id),
+    )
     return {
         "schema": IR_SCHEMA,
         "source": {
@@ -149,7 +153,7 @@ def export_ir(
                     "pins": item.pins,
                     "raw": item.raw,
                 }
-                for item in circuit.hierarchy_instances
+                for item in hierarchy_instances
             ]
         },
         "annotations": annotations,

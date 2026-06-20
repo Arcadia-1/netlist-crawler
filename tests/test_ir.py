@@ -63,6 +63,40 @@ def test_export_ir_preserves_expanded_hierarchy_port_map(tmp_path: Path) -> None
     assert nc.validate_ir(ir)["valid"] is True
 
 
+def test_export_ir_sorts_nested_hierarchy_parent_before_children(tmp_path: Path) -> None:
+    netlist = tmp_path / "nested_hierarchy.sp"
+    netlist.write_text(
+        """
+        .subckt LEAF A Y VSS
+        M1 Y A VSS VSS nch
+        .ends LEAF
+        .subckt MID IN OUT VSS
+        XBUF IN n1 VSS LEAF
+        XDRV n1 OUT VSS LEAF
+        .ends MID
+        .subckt TOP vin vout vss
+        XAMP vin vout vss MID
+        .ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    ir = nc.export_ir(netlist, topcell="TOP", expand_depth=2)
+
+    assert [item["id"] for item in ir["instances"]] == ["XAMP.XBUF.M1", "XAMP.XDRV.M1"]
+    assert [item["id"] for item in ir["hierarchy"]["instances"]] == [
+        "XAMP",
+        "XAMP.XBUF",
+        "XAMP.XDRV",
+    ]
+    parent = ir["hierarchy"]["instances"][0]
+    assert parent["definition"] == "MID"
+    assert parent["members"]["devices"] == ["XAMP.XBUF.M1", "XAMP.XDRV.M1"]
+    assert parent["members"]["nets"] == ["XAMP.n1"]
+    assert nc.validate_ir(ir)["valid"] is True
+
+
 def test_ir_without_rule_annotations_reports_missing_coverage() -> None:
     ir = nc.export_ir(Path("examples/simple_diff_pair.sp"), include_rule_annotations=False)
 
