@@ -5,8 +5,8 @@ global 0
 
 parameters Vgs=0.5 Vds=0.45
 
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=pre_simu
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=ttmacro_mos_moscap
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=pre_simu
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=ttmacro_mos_moscap
 
 V_g (G 0) vsource dc=Vgs type=dc
 V_d (D 0) vsource dc=Vds type=dc

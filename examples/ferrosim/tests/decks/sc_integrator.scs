@@ -6,8 +6,8 @@ simulator lang=spectre
 global 0
 parameters VDD=0.9 VCM=0.45 VIN_D=50m
 
-include "/home/zhangz/T28/toplevel_modified.scs" section=pre_simu
-include "/home/zhangz/T28/toplevel_modified.scs" section=top_tt
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=pre_simu
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=top_tt
 
 subckt tgate A B CK CKB VDD VSS
 mn (A CK B VSS) nch_ulvt_mac l=30n w=2u multi=1 nf=4

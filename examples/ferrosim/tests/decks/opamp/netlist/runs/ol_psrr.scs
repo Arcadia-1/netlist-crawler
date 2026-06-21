@@ -5,7 +5,7 @@ simulator lang=spectre
 global 0
 parameters VSUP=0.9 VCM=0.45 IB=20u CL=1p acdm=0 accm=0 acvdd=1 vid=0
 
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/tsmcN28/../models/spectre/toplevel.scs" section=TOP_TT
+include "${PDK_ROOT}/models/spectre/toplevel.scs" section=TOP_TT
 include "ota_fd2s.scs"
 include "tb_openloop.scs"
 

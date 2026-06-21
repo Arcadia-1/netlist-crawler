@@ -3,10 +3,10 @@
 simulator lang=spectre
 global 0
 parameters vdd=0.95 code=7 f=1G Vcm=0.475 Vid=1m VDD=0.9
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=noise_worst
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=TTMacro_MOS_MOSCAP
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=TT_RES_BIP_DIO_DISRES
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=TT_MOM
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=noise_worst
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=TTMacro_MOS_MOSCAP
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=TT_RES_BIP_DIO_DISRES
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=TT_MOM
 include "dut/cmp_strongarm.scs"
 include "dut/cmp_under_test_plain.scs"
 include "tb/tb_cmp_pss_pnoise.scs"

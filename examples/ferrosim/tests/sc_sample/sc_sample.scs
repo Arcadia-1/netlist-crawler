@@ -4,7 +4,7 @@ simulator lang=spectre
 global 0
 parameters fs=50M VDD=0.9 VCM=0.45 CS=100f WSW=2u
 
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/tsmcN28/../models/spectre/toplevel.scs" section=TOP_TT
+include "${PDK_ROOT}/models/spectre/toplevel.scs" section=TOP_TT
 
 v_in  (IN 0)  vsource dc=VCM type=dc
 v_clk (CLK 0) vsource type=pulse val0=0 val1=VDD period=1/fs rise=50p fall=50p

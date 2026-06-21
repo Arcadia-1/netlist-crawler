@@ -4,6 +4,10 @@ Source: https://github.com/Arcadia-1/ferrosim
 
 Curated Spectre netlist examples imported from ferrosim test decks.
 
+Sensitive absolute include paths were replaced with placeholders such as
+`${PDK_ROOT}`, `${CADENCE_ROOT}`, and `${PROJECT_VA_ROOT}` so the examples
+preserve their include intent without exposing local filesystem layouts.
+
 Included:
 
 - Real test decks under `tests/`, including ported analog blocks, SAR ADC blocks, opamps, comparators, sampling switches, and small Verilog-A demos.
@@ -53,16 +57,16 @@ Total netlist files: 122
 | Path | Bytes | SHA256 |
 |---|---:|---|
 | `tests/decks/amp5t/netlist/dut/amp_5t_d2s.scs` | 461 | `5ca6e86bce133ac92d93520f0a240e733bd3b4cd7ace2ba36407551db3cb20df` |
-| `tests/decks/amp5t/netlist/runs/common_setup.scs` | 2477 | `c8a441ba688e2157788df9173cf4093da876748054e3e15d0f6eeeb42b2f12f7` |
+| `tests/decks/amp5t/netlist/runs/common_setup.scs` | 1742 | `5669b3b50b8b33913db3b38f3de6e05907842abe9511b99e397eaf504e6a1262` |
 | `tests/decks/amp5t/netlist/runs/vdd_0p9.scs` | 74 | `4e3f70f41af98c38ec3e4bd3577dc94553541ecb56aa61b983cce2a5424ec038` |
 | `tests/decks/amp5t/netlist/runs/vdd_1p0.scs` | 74 | `54d43f9a41c6f796a59b0a08f1fffc212a6605ecb7072f0715b9ec2803746c3f` |
 | `tests/decks/amp5t/netlist/tb/tb_amp_5t_d2s_dc_ac.scs` | 438 | `8f1d0bb2df59b70fecd3d86ae033b95103885154be32d2e585446cd30273412f` |
 | `tests/decks/biquad/netlist/dut/hs_biquad_ota.scs` | 13857 | `df6f6b108539a6df0a92ef197639d73e9e836d5aba4b36704d911934ee1c8b6b` |
 | `tests/decks/biquad/netlist/dut/hs_biquad_ota_geometry.scs` | 100660 | `adbaf0dc56479284cb31e1f52cad3c8b2777d7e4fd3966a3f402c9a1a70c6f96` |
-| `tests/decks/biquad/netlist/runs/common_ac_noise.scs` | 1339 | `b833b46d79b4ccd1bf6067e94097ef19ecdc68c65d53b6b76bdcbcc6fb6e4784` |
-| `tests/decks/biquad/netlist/runs/common_ac_noise_geometry.scs` | 1357 | `7fae76bad2ff2cd1ee4048d8c963b1aa1951851d39bef94434248be198b0aeea` |
-| `tests/decks/biquad/netlist/runs/common_setup.scs` | 1636 | `50256e01bc7ecab41ca0f5ae8f72ec46a45eac452370d0578fe144730a7ebaaa` |
-| `tests/decks/biquad/netlist/runs/common_setup_geometry.scs` | 1654 | `3557537c8b57a636139fcfb7ac1cc5ab8c5f674a5d34f1e487150a78b760c938` |
+| `tests/decks/biquad/netlist/runs/common_ac_noise.scs` | 1332 | `22789868af33cab09ccfc2cac9862a1baaa9628d38134dc8350e0287cea9075e` |
+| `tests/decks/biquad/netlist/runs/common_ac_noise_geometry.scs` | 1350 | `c788f6086359cfb8eee1f58393b062d8b5b42e28deb484da23d06db67c1ba7e3` |
+| `tests/decks/biquad/netlist/runs/common_setup.scs` | 1629 | `002bb30c04aff992851535816d99a13c5cc2969e5e82b46614e0ab6cdcca5632` |
+| `tests/decks/biquad/netlist/runs/common_setup_geometry.scs` | 1647 | `37f3f2fe3ac65b57011cfc63789b1965a1349ae2929a8fc740b1cd810ae7ac81` |
 | `tests/decks/biquad/netlist/runs/vdd_1p1.scs` | 74 | `42415cfd1bb8e2edb8e7b27d9d76766f5596ae5a7926b2fdd03371c4b0d260f9` |
 | `tests/decks/biquad/netlist/runs/vdd_1p1_geometry.scs` | 83 | `df1264c4edbdb2e41a7249621f010d516cd54c1a78ed827b02ad494ffa0110a3` |
 | `tests/decks/biquad/netlist/runs/vdd_1p2.scs` | 74 | `dd5fa2f29211542eac15614342c8b7aa4a8887a4ff8b8adb54daee7d12c3ddd0` |
@@ -81,30 +85,30 @@ Total netlist files: 122
 | `tests/decks/comparator/netlist/dut/cmp_strongarm_offset_trim.scs` | 3583 | `c5770a8d11823688fb63603281d273ce9f0cfa0867537464f88a1642fce6e226` |
 | `tests/decks/comparator/netlist/dut/cmp_under_test_offset_trim.scs` | 316 | `c6d2b3a87fd6491da6dbf4381fd1edd8800f88b1bed2344fa6b2f2c54e28908a` |
 | `tests/decks/comparator/netlist/dut/cmp_under_test_plain.scs` | 236 | `c022555c306dc9f473baf67d0087df30bed63d3be3bf130708b0c07cf3cd684c` |
-| `tests/decks/comparator/netlist/runs/mc_offset_offset_trim.scs` | 1422 | `9fc379d5ee1e16123d8a4219d6e6e5dfb872c1fa55f7b64e2c6c6fbd1ca39883` |
-| `tests/decks/comparator/netlist/runs/mc_offset_plain.scs` | 1403 | `1ccc1bf981f0a274950d0f6c16c60b92599b5223459c00334d97e36f71f40776` |
-| `tests/decks/comparator/netlist/runs/offset_offset_trim.scs` | 1142 | `3b62e5162848b8607eaabcb0d4db52339ee3d1d8264d422fabe1c584aeda479c` |
-| `tests/decks/comparator/netlist/runs/offset_plain.scs` | 1123 | `016930c059fef21442ae182f66a8c8e9b63a6442a712f76be4eb6298121240db` |
-| `tests/decks/comparator/netlist/runs/pss_pnoise_offset_trim.scs` | 1291 | `0caf944b211c5168752dd4d53fa0a032c942cc63e4fd7385a33fb19507b55251` |
-| `tests/decks/comparator/netlist/runs/pss_pnoise_plain.scs` | 1272 | `2436c61cffb64c2fe6a4210497184f6afeb9dd8984f04f719d420b61982750ae` |
-| `tests/decks/comparator/netlist/runs/pvt_pss_pnoise_offset_trim.scs` | 1993 | `d4b447b2aa0c307b82a6f9f4e93a76fb2b28fa34f702aae7a0cb38ccdef83d2f` |
-| `tests/decks/comparator/netlist/runs/pvt_pss_pnoise_plain.scs` | 1992 | `df5ddc7e559903f11c4a7532ec3380f8e0a69c3257be0b072df145ffb007b6b8` |
+| `tests/decks/comparator/netlist/runs/mc_offset_offset_trim.scs` | 1432 | `4f8cea01714b283e75b295b35bcf34ca0c68f69e5e2bef9b63fa24c7e8ecb7e7` |
+| `tests/decks/comparator/netlist/runs/mc_offset_plain.scs` | 1413 | `6f8b447aef5c5d1d381485d03fdf96d530bbf9b0ef9c0167f277d6c80e9be45a` |
+| `tests/decks/comparator/netlist/runs/offset_offset_trim.scs` | 1152 | `8eb3f612be4c1dd04b25c65474a6e87d7f8cc304b361e792ec6b4f6aa76272f5` |
+| `tests/decks/comparator/netlist/runs/offset_plain.scs` | 1133 | `5a8a375c1bbc7fce6d608a64997ec5143fd31305c69555f7b90e01e035c427f8` |
+| `tests/decks/comparator/netlist/runs/pss_pnoise_offset_trim.scs` | 1301 | `4ca523ed93df421b60fee86664f24370f4c809b75af50d303585d2fa0077395e` |
+| `tests/decks/comparator/netlist/runs/pss_pnoise_plain.scs` | 1282 | `a1fc6189a14a904a3f4e57e2c6da8390f417cd6e9a792bbf7c93d9d7a4089f1a` |
+| `tests/decks/comparator/netlist/runs/pvt_pss_pnoise_offset_trim.scs` | 1617 | `79108ffb29e78e484a468590b23f40d4640b376cc9e4f30869ac520960f6ecbf` |
+| `tests/decks/comparator/netlist/runs/pvt_pss_pnoise_plain.scs` | 1616 | `cf885f4335ab08444ae01ea54caad3aad06f1bf0e129ed0def408b7b1b4a03bb` |
 | `tests/decks/comparator/netlist/tb/tb_cmp_offset_search.scs` | 530 | `9ef03c60d0c9e860bfeb463caba38f12f6010299659b10421f5b3a2b5441979e` |
 | `tests/decks/comparator/netlist/tb/tb_cmp_pss_pnoise.scs` | 537 | `fc03fc73184e4956bff4539353b6e4bed879e962ca4914a6d5b478e45dbbf012` |
 | `tests/decks/inbuf/netlist/dut/l1_input_buffer_cascode.scs` | 15981 | `3b223abfd9f402e68061338ffb5e1d67afdb4fd12d110be5b4b65b7832a6cfe4` |
-| `tests/decks/inbuf/netlist/runs/pss_100M.scs` | 814 | `997be7a10615f0086a855132f02bfd3af5770d26c8c803863159ac64944127d1` |
-| `tests/decks/inbuf/netlist/runs/pss_1G.scs` | 812 | `6e700552dc8ee641b536c6da92945f24ba11b108e33df599a1a978297d398403` |
-| `tests/decks/inbuf/netlist/runs/pss_2G.scs` | 812 | `b0163f435abf864ac73d355669fc61e71b91edda6c65d2adc5c469c729bddbf5` |
-| `tests/decks/inbuf/netlist/runs/pss_4G.scs` | 812 | `2d09b3491bb232150b2250fffe315b47c3c4672be7d1bd51dd361ee12d4234a0` |
-| `tests/decks/inbuf/netlist/runs/pss_8G.scs` | 812 | `aee98bb34387b44ff636b3cfda344d3f1007b205bca46cea6058717232296fe3` |
+| `tests/decks/inbuf/netlist/runs/pss_100M.scs` | 824 | `01434b6b63242483cacf031a36a31079311a89f331fb2387cebc9ef2a730401d` |
+| `tests/decks/inbuf/netlist/runs/pss_1G.scs` | 822 | `89d316a74974187765bc59b1d47e4c96288a8b738c764b50dc4338b70ccef1e3` |
+| `tests/decks/inbuf/netlist/runs/pss_2G.scs` | 822 | `f4c935ba42d34b57a9c95c40ce475b81e12ca421514238f98675fbced8901c7f` |
+| `tests/decks/inbuf/netlist/runs/pss_4G.scs` | 822 | `4cc177a6288de66a23cda5d69543d3a8e4e44a63f2c9bbc8a85e9f3d8f1a8617` |
+| `tests/decks/inbuf/netlist/runs/pss_8G.scs` | 822 | `94b3d9ef66e7a6dedc898cbca6d11bafdc99db6b676dd712b8f53fbdd7e6997c` |
 | `tests/decks/inbuf/netlist/tb/tb_input_buffer_cascode_pss.scs` | 564 | `d1d0126176e4f6f5e0da00a87667cb038a0b28e2c110c1ef844b167438c6f3a5` |
-| `tests/decks/ldo.scs` | 1849 | `64818c200c0e257ac9a6a5c6f283968feee52346f2ae21a34e0080c0a6b6e1dc` |
+| `tests/decks/ldo.scs` | 1869 | `c5f9458654bf209b01ad2c10fdcb2736079d324e55dd71a99f3b621fb161ccef` |
 | `tests/decks/opamp/netlist/dut/ota_fd2s.scs` | 4306 | `4a4558925b8bf72a1e40e0dfa5b989244f5a7dcd3ab24eca6c8a34dc65be1c34` |
-| `tests/decks/opamp/netlist/runs/cl_tran.scs` | 821 | `4f05a9ab54e2696249d3645d31f11380add62935df28e01aae94780fec464bd1` |
-| `tests/decks/opamp/netlist/runs/mc_offset.scs` | 777 | `993992cea1152248a5216047fea4ef33a6e9b7699128fd89cca0e558181d365c` |
-| `tests/decks/opamp/netlist/runs/ol_cmrr.scs` | 765 | `64d8b9ec30cfcaf24b296ca88f38d0ef0e1a7d42925d9701cdd30ea1e2863c83` |
-| `tests/decks/opamp/netlist/runs/ol_main.scs` | 1225 | `f61f718a01707f9f03c1f94145ed1068cc259cf33990e08080b31683795e8182` |
-| `tests/decks/opamp/netlist/runs/ol_psrr.scs` | 794 | `29bf280b6fc39176ff3768c70393fb68bd1428a63b259975272203ab6456203a` |
+| `tests/decks/opamp/netlist/runs/cl_tran.scs` | 752 | `79e902a569b46071d5b08ab773a3efb6cd7e745c1d965bfc4a30f708f0015a5b` |
+| `tests/decks/opamp/netlist/runs/mc_offset.scs` | 787 | `ebec76b5f512a4cbeec974424e7b397736336d8d4d55bd127b097a9aef5116a2` |
+| `tests/decks/opamp/netlist/runs/ol_cmrr.scs` | 696 | `cfc8533a20b6b173f455cdc15cd220fed21ff9d19bdb8042bcbe24ce8bda38ca` |
+| `tests/decks/opamp/netlist/runs/ol_main.scs` | 1156 | `b45891638ea7940713d80d1a0b27a8b9ed2bfc851fc28bb11730d7eb665da8a2` |
+| `tests/decks/opamp/netlist/runs/ol_psrr.scs` | 725 | `781e7fe3000b9cfdef9bf11bcc52f7bc5c7701c5679740fa121f7870054e505b` |
 | `tests/decks/opamp/netlist/tb/tb_closedloop.scs` | 1397 | `b7923e2241b1acf624878335b05f3ba425b9e104c8667f6d13c0accd8462bf70` |
 | `tests/decks/opamp/netlist/tb/tb_openloop.scs` | 976 | `e6203272e77ac6cf38d5a89392ab6a538f1578d2430bd5b9ff5aa47677b4d298` |
 | `tests/decks/ported/bandgap_core_28.scs` | 1348 | `6df671f491632b5f4e3963a0dc714e617f2147c055e46430c182645b498e591f` |
@@ -125,23 +129,23 @@ Total netlist files: 122
 | `tests/decks/ported/two_stage_opamp_28.scs` | 948 | `dd5b696fad0e1f7a45ff534f2d850c60d6398c70bea2933db3667391bf8df2e0` |
 | `tests/decks/ported/two_stage_opamp_65.scs` | 949 | `36b5ca458ba79642667746ba5ec27b217f2865a291a0eaf3396ff8f258e29ee4` |
 | `tests/decks/refbuf/netlist/dut/ref_buffer_blocks.scs` | 2895 | `9f07578fca987c9a6169330f74e36a4a0931066455ce388426608a77f57ac9a2` |
-| `tests/decks/refbuf/netlist/runs/dc_ac_tran_noise.scs` | 2691 | `75e8e890789eb88fabe036d72ea0446c95b8ab3e5b5b607e9eea7e9e42152c8c` |
+| `tests/decks/refbuf/netlist/runs/dc_ac_tran_noise.scs` | 2033 | `280f5807b74e5596654c770739df586fddbeb1c1b718383da0907767010d7f65` |
 | `tests/decks/refbuf/netlist/tb/tb_ref_buffer_characterization.scs` | 1103 | `4ceb30c44256c258a3842021cc61a37fe006a80ca2571ebcd5c8fea4e4456bce` |
 | `tests/decks/restrim/netlist/dut/res_trim_thermo_16.scs` | 2578 | `087324f5d9b90a6d33862dbb7219e6a618faef83503bfd717adf4a2653ed4504` |
-| `tests/decks/restrim/netlist/runs/dc_trim_resistance.scs` | 1788 | `cdd4b1640b2c381ecdc7be8296e39ed0c546a08e9c7b6b64ef05d3966c0ece38` |
+| `tests/decks/restrim/netlist/runs/dc_trim_resistance.scs` | 1318 | `2dbb9f6426f81c9fc06f26508d4cc807566fe0d6342a19744023d206f1059c6d` |
 | `tests/decks/restrim/netlist/tb/tb_resistance_dc.scs` | 856 | `11c7b2e68d5b2c55a8967acf8aa383fca32c6b2cdda3c87d62eca7580d164fc2` |
-| `tests/decks/ring5.scs` | 1144 | `a6fa1708cd2bdacf70a72c4e96aca2b972458c5ad4e2dd8dad022d40bff42b68` |
+| `tests/decks/ring5.scs` | 1164 | `510bb0ee2821e36ebacba8b82a160b21cf39d76143c7fa05afc5003508b05915` |
 | `tests/decks/sampling_bts/netlists/bootstrap.scs` | 8367 | `77cde6f2ed79e6da2306f7491382b987576a12643793f33fe53e5d2325d72d64` |
 | `tests/decks/sampling_bts/netlists/bottom_plate_dut.scs` | 2921 | `5407fbef2e0d8c18865aecf508c7a89ab62615b7a4f68b7c9aac6b8d89f82238` |
-| `tests/decks/sampling_bts/netlists/bottom_plate_ideal_bts.scs` | 2638 | `1b123f30b9b967e467a37ee7f166061bfbe7361d8b4be3bb390f4f6d8baa5ac4` |
-| `tests/decks/sampling_bts/netlists/bottom_plate_real_bts.scs` | 2615 | `dd04515d55809849a136933e4c2e833277773c9db25fc383abe30d66befec5d8` |
+| `tests/decks/sampling_bts/netlists/bottom_plate_ideal_bts.scs` | 2648 | `1f232521bb8b506517bf1666c68e9e25ceadb83e32127833a64674f01189c557` |
+| `tests/decks/sampling_bts/netlists/bottom_plate_real_bts.scs` | 2625 | `ee61620b270617c558c237b73253548300ab7910283d1e1f3ba2ec36c75fc670` |
 | `tests/decks/sampling_bts/netlists/top_plate_dut.scs` | 1336 | `20b7f7818d73bfa8ba4f46e68d9c4e468ec807512944c6264bba2946ddf06df6` |
-| `tests/decks/sampling_bts/netlists/top_plate_ideal_bts.scs` | 1676 | `10c46d517a419f5bb85f05fa050ab1f024048a74bd47d1daadbe5e4d0132eeca` |
-| `tests/decks/sampling_bts/netlists/top_plate_real_bts.scs` | 1691 | `0bd16f9cb30350f530426a5efa9502f53151555e004e89358bff0e08ece18859` |
+| `tests/decks/sampling_bts/netlists/top_plate_ideal_bts.scs` | 1686 | `c38693c6163c5e325ede9fb02bc2fd5d628dd253c160f67bceb8a3a7bab05d4e` |
+| `tests/decks/sampling_bts/netlists/top_plate_real_bts.scs` | 1701 | `b1cb8ba4e33f10a701ffececa75c3b2513826a1d56f03b11e946feb586b3600f` |
 | `tests/decks/sar/netlists/sampling_bootstrap_l4_bts_x2.scs` | 396 | `d188efcb1353ca3e13890da9cd785942299061f3579fc3fb87c2d1b01f5978f6` |
 | `tests/decks/sar/netlists/sar_adc_11b_sampling_bts_with_mos.scs` | 923 | `0e28dc1a92f8d1e72f75846f8299076847a1b53ff563f471020482fe6359891e` |
 | `tests/decks/sar/netlists/sar_adc_11b_with_mos.scs` | 929 | `389d571300e4bcbc778f53d5bc3735ec88c5fb6dc05bf5c506d4aa922bc66a31` |
-| `tests/decks/sar/netlists/variants/with_mos/00_corner_and_models.scs` | 1940 | `7fd76f7a198483c5b028ef36e649a23e96d0d54c61acf90c77994944d75ebfe1` |
+| `tests/decks/sar/netlists/variants/with_mos/00_corner_and_models.scs` | 1282 | `ecd1fb66e9a48bb61d83f656ab73a09536bf3d1c1b72e9893bc5f51568839721` |
 | `tests/decks/sar/netlists/variants/with_mos/10_refgen_ideal.scs` | 394 | `837d32f814d2acc4dc923fb69398087504df5da847aa5db888e2075cbd49b51b` |
 | `tests/decks/sar/netlists/variants/with_mos/20_comparator_dynamic_l4.scs` | 19380 | `b34e6dfe544c33a46595ec4ec610b107dd8b06f6add3ff8c06611ee5a3e0a8e0` |
 | `tests/decks/sar/netlists/variants/with_mos/30_bottom_plate_switch_l5.scs` | 11641 | `1b211d9c9b7eb579587946d9763dccda6a7dc8fc87be99df6e30112eeafdbf6c` |
@@ -155,18 +159,18 @@ Total netlist files: 122
 | `tests/decks/sar/netlists/variants/with_mos/60_bootstrap_core_lb.scs` | 6337 | `1ef6323ea0b16d13f3ad961fbfa2e5bb880c84e8e98bdb1e65a1af1deeeaee1c` |
 | `tests/decks/sar/netlists/variants/with_mos/61_bootstrap_diff_l4.scs` | 351 | `0890636ea0aa2eabe18dee6008490d704c090e2d1f6d8e4f2eddc70364d91900` |
 | `tests/decks/sar/netlists/variants/with_mos/90_sar_adc_11b_l3.scs` | 1924 | `fc155a9f59886385fafa807e305416095674055b79dff279abfd31e9c9719c00` |
-| `tests/decks/sar/netlists/variants/with_mos/99_tb_sar_adc_11b_interactive13.scs` | 2346 | `2da8acde8972c390f18f9eb778e2a2265387009ac224f63f9c870d8b83c2d766` |
+| `tests/decks/sar/netlists/variants/with_mos/99_tb_sar_adc_11b_interactive13.scs` | 2284 | `b2ad42fd9b296270c3386e5c3403ec32e8896069a36f0d050fa557aecb8631a4` |
 | `tests/decks/sc_counter/netlist/dut/counter_prog_4b.scs` | 1990 | `42a973b738f8d4af4355c657df4d12e4a30121c292340ad989f97f5bf9e36b08` |
-| `tests/decks/sc_counter/netlist/runs/tran_counter_prog_4b.scs` | 2076 | `ba31e064daff9c40ef45ec0f882fec187dc002382f049e73e68127c2a3b44baf` |
+| `tests/decks/sc_counter/netlist/runs/tran_counter_prog_4b.scs` | 1512 | `5e01fb4bad37e08ae68c795eb19f8593dae69c2b02fb09df3d9b5f7d3345c8bb` |
 | `tests/decks/sc_counter/netlist/tb/tb_counter_prog_4b.scs` | 597 | `8570a20237fbc4f610cb46c2a992dae6a863ad47941a9232121f409af715a53d` |
-| `tests/decks/sc_integrator.scs` | 1910 | `67857807eb388f5a3f5fd47350e65b97e835d03fe5d05fb6b273a671a962e6ec` |
-| `tests/decks/sc_ring/netlists/ring_osc_lvt.scs` | 938 | `9c8f4b0bdea795679439e6603f2a0ae49d3790f828823a914a20e7514cf07316` |
-| `tests/decks/sc_ring/netlists/ring_osc_svt.scs` | 926 | `6f8b2bcb91f97bcd9737398ddad4725d99b0f047c03a7f09d4deb7c0d2b808bb` |
-| `tests/decks/transistor_char/dc_vds_dibl_ulvt.scs` | 1007 | `7e12364843312f8162761ad1fdaba0eb7ee99bc0e1506bfdd8110dfa6085e0cb` |
-| `tests/decks/transistor_char/dc_vds_ron_ulvt.scs` | 1067 | `633346b1d7b9dc64cc74c394627034c77fbce090121b3bef53f8ae4741846a76` |
-| `tests/decks/transistor_char/dc_vgs_gmid_ulvt.scs` | 1039 | `ea3b85b0b51659b044eacbea23cfffcec6bdcabd5f516de805bef6cf2dcba37e` |
+| `tests/decks/sc_integrator.scs` | 1930 | `361e6d7a0245aff02e6be6b5a61db3c555291303abb92745faf20acf2c786477` |
+| `tests/decks/sc_ring/netlists/ring_osc_lvt.scs` | 750 | `eaf418ea477a630089cb21acb18b961050d75997decc4e114de029944bfad846` |
+| `tests/decks/sc_ring/netlists/ring_osc_svt.scs` | 738 | `5a687fffe37c73446589d34ea59da2f1482ee25cccb3f1276f947e06f3af4464` |
+| `tests/decks/transistor_char/dc_vds_dibl_ulvt.scs` | 819 | `c9a482957031695f63c5b6a84394300828d0bb10cd303b1459258faf8bb8c37b` |
+| `tests/decks/transistor_char/dc_vds_ron_ulvt.scs` | 879 | `58171b32e80accf3b4903435fef916a8f1f692dee4132e6c6f6a70d2e4969bdb` |
+| `tests/decks/transistor_char/dc_vgs_gmid_ulvt.scs` | 851 | `c8c5ee09e35c01eb2a84d4c3f93561ed94c5f52e06e7170eb3964024ed58131c` |
 | `tests/decks/va_decl_init.scs` | 1110 | `47b9ef3536d93ff8d9faf5141c6f47f4449f24b06cd6b71586023339daa3943a` |
-| `tests/sc_sample/sc_sample.scs` | 939 | `ea075347dd6b9ca93909b4049309c87fac67d75b525fb93ed92f7b18360c4869` |
+| `tests/sc_sample/sc_sample.scs` | 870 | `6e4ecf50bb9ba52107f148ed305bcd05109490f2baa1eb29747cb6cb047071c3` |
 | `tests/va_demo/tb_chain.scs` | 231 | `49b89a4296c78ec6b2aed4fd51fcb17927cec5ae2f91d5e87aa3e1b6e939d82e` |
 | `tests/va_demo/tb_cswitch_res.scs` | 245 | `7653ff5e9306111a3f09c45ebb28ebc73a80ce7ef7c3b9d62f8f34e44673ace8` |
 | `tests/va_demo/tb_cswitch_short.scs` | 246 | `d34fefef35d2e4d54a8d99de67550191ad1f3a66f45b65c2171bf0dc467f56a0` |

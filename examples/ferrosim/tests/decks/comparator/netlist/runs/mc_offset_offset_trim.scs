@@ -2,7 +2,7 @@
 simulator lang=spectre
 global 0
 parameters vdd=0.9 code=7 f=1G Vcm=0.45 VDD=0.9 offset_step=50m
-include "/home/zhangz/T28/toplevel_modified.scs" section=globalmc_localmc
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=globalmc_localmc
 include "dut/cmp_strongarm_offset_trim.scs"
 include "dut/cmp_under_test_offset_trim.scs"
 include "tb/tb_cmp_offset_search.scs"

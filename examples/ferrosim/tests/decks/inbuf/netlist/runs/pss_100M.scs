@@ -3,7 +3,7 @@ global 0
 
 parameters CL=400f A=250m f=100M IB=120u Vcm=0.45
 
-include "/home/zhangz/T28/toplevel_modified.scs" section=top_tt
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=top_tt
 include "dut/l1_input_buffer_cascode.scs"
 include "tb/tb_input_buffer_cascode_pss.scs"
 

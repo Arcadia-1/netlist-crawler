@@ -2,11 +2,11 @@
 simulator lang=spectre
 global 0
 parameters VDD=0.9 VCM=0.5 VTEST=50m TRIM_R=8
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=pre_simu
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=TTMacro_MOS_MOSCAP
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=TT_RES_BIP_DIO_DISRES
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=TT_MOM
-include "/home/process/tsmc28n/PDK_mmWave/iPDK_CRN28HPC+ULL_v1.8_2p2a_20190531/models/spectre/crn28ull_1d8_elk_v1d8_2p2_shrink0d9_embedded_usage.scs" section=TT_R_METAL
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=pre_simu
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=TTMacro_MOS_MOSCAP
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=TT_RES_BIP_DIO_DISRES
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=TT_MOM
+include "${PDK_ROOT}/models/spectre/crn28ull_model.scs" section=TT_R_METAL
 include "dut/res_trim_thermo_16.scs"
 include "tb/tb_resistance_dc.scs"
 

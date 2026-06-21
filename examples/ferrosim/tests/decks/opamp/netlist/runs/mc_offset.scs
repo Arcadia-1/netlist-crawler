@@ -4,7 +4,7 @@ simulator lang=spectre
 global 0
 parameters VSUP=0.9 VCM=0.45 IB=20u CL=1p RFB=20k vstep=0
 
-include "/home/zhangz/T28/toplevel_modified.scs" section=globalmc_localmc
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=globalmc_localmc
 include "ota_fd2s.scs"
 include "tb_closedloop.scs"
 

@@ -40,5 +40,5 @@ save AOUT I_SAR.VTOPP I_SAR.VTOPN I_SAR:19 I_SAR.CMPCK DOUT\<11\> \
     DOUT\<10\> DOUT\<9\> DOUT\<8\> DOUT\<7\> DOUT\<6\> DOUT\<5\> DOUT\<4\> \
     DOUT\<3\> DOUT\<2\> DOUT\<1\> DOUT\<0\> CLKS RSTP 
 saveOptions options save=allpub
-ahdl_include "/home/zhangz/TSMC28N/2025_PIPESAR_FIA/SAR_11B_ZZS/_VA_D2B_ENCODER_4B/veriloga/veriloga.va"
-ahdl_include "/home/zhangz/TSMC28N/2025_PIPESAR_FIA/SAR_11B_ZZS/_VA_DAC_11B/veriloga/veriloga.va"
+ahdl_include "${PROJECT_VA_ROOT}/_VA_D2B_ENCODER_4B/veriloga/veriloga.va"
+ahdl_include "${PROJECT_VA_ROOT}/_VA_DAC_11B/veriloga/veriloga.va"

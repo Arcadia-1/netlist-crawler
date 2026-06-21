@@ -7,7 +7,7 @@ parameters VDD=900m Vcm=450m A=400m Fs=1G N=128 J=37 t_delay=20p
 parameters Fin=((J/N)*Fs) t_end=((N+2)/Fs)
 
 include "../../common/stdcell_netlist/tcbn28hpcplusbwp12t30p140lvt_170a.spi"
-include "/home/zhangz/T28/toplevel_modified.scs" section=top_tt
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=top_tt
 include "bootstrap.scs"
 include "top_plate_dut.scs"
 

@@ -6,8 +6,8 @@ parameters MFC=(48 - MF) MFI=8 NFCM=16 IB1=120u VICM=600m RL2=0 RL=400 \
     f=1072265625 f0=1.2G fs=9G IB2=800u NC1=0 NC2=0 Nshort=0 Q=1 R1=100 \
     R2=50 R_ac=10k VCM=600m vdc=0
 
-include "/home/zhangz/T28/toplevel_modified.scs" section=top_ss
-include "/home/cadence/ic618/IC618Hotfix4/tools/dfII/etc/cdslib/artist/analogLib/diffstbprobe/diffstbprobe.scs"
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=top_ss
+include "${CADENCE_ROOT}/tools/dfII/etc/cdslib/artist/analogLib/diffstbprobe/diffstbprobe.scs"
 include "dut/hs_biquad_ota.scs"
 include "tb/tb_biquad_exp.scs"
 

@@ -2,7 +2,7 @@
 simulator lang=spectre
 global 0
 parameters vdd=0.95 code=7 f=1G Vcm=0.475 Vid=1m VDD=0.9
-include "/home/zhangz/T28/toplevel_modified.scs" section=top_tt
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=top_tt
 include "dut/cmp_strongarm_offset_trim.scs"
 include "dut/cmp_under_test_offset_trim.scs"
 include "tb/tb_cmp_pss_pnoise.scs"

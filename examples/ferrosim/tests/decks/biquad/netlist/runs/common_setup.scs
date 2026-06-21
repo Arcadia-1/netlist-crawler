@@ -11,8 +11,8 @@ time  maxstep  reltol
 0     1p       1E-4
 }
 
-include "/home/zhangz/T28/toplevel_modified.scs" section=top_ss
-include "/home/cadence/ic618/IC618Hotfix4/tools/dfII/etc/cdslib/artist/analogLib/diffstbprobe/diffstbprobe.scs"
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=top_ss
+include "${CADENCE_ROOT}/tools/dfII/etc/cdslib/artist/analogLib/diffstbprobe/diffstbprobe.scs"
 include "dut/hs_biquad_ota.scs"
 include "tb/tb_biquad_exp.scs"
 

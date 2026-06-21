@@ -5,8 +5,8 @@ simulator lang=spectre
 global 0
 parameters VDD=0.9 VREF=0.55 ILOAD=0.5m
 
-include "/home/zhangz/T28/toplevel_modified.scs" section=pre_simu
-include "/home/zhangz/T28/toplevel_modified.scs" section=top_tt
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=pre_simu
+include "${PDK_ROOT}/models/spectre/toplevel_modified.scs" section=top_tt
 
 v_vdd (VDDA 0) vsource dc=VDD mag=1 type=dc
 
