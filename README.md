@@ -140,6 +140,20 @@ netlist-crawler prescribe examples/parasitics/f2_diffpair_cc.flat.scs --nets nIP
 netlist-crawler inject --help
 ```
 
+## Example Corpora
+
+The `examples/` tree includes three levels of netlist fixtures:
+
+- Small structural examples such as `simple_diff_pair.sp`,
+  `hierarchical_ota.sp`, and `include_top.sp` for fast CLI checks.
+- Compact parasitic fixtures under `examples/parasitics/` for RC, coupling,
+  and within-net resistance analysis.
+- A curated ferrosim corpus under `examples/ferrosim/`: 122 unique Spectre
+  test-deck netlists covering ported analog blocks, SAR ADC modules, opamps,
+  comparators, sampling switches, Verilog-A demos, and one compact transistor
+  characterization set. The large `output/char_netlists/` sweep expansion is
+  intentionally excluded to avoid near-duplicate characterization decks.
+
 ## Roadmap
 
 1. Harden semantic detectors beyond the first-pass rules: bias trees, feedback
