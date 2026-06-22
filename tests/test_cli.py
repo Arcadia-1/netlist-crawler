@@ -854,6 +854,36 @@ def test_spectre_non_x_prefix_instances_use_subckt_port_mapping(tmp_path) -> Non
     assert expanded_devices["I0.R0"]["pins"] == {"1": "I0.DO50", "2": "I0.DI33"}
 
 
+def test_primitive_pin_name_matching_subckt_name_stays_primitive(tmp_path) -> None:
+    netlist = tmp_path / "pin_name_subckt_collision.sp"
+    netlist.write_text(
+        """
+        .subckt IN A B
+        R0 A B 1k
+        .ends IN
+
+        .subckt TOP OUT IN VSS
+        M1 OUT IN VSS VSS nch W=1u L=1u
+        .ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "TOP", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    device = payload["devices"][0]
+    assert device["name"] == "M1"
+    assert device["kind"] == "M"
+    assert device["model"] == "nch"
+    assert device["pins"] == {"D": "OUT", "G": "IN", "S": "VSS", "B": "VSS"}
+
+
 def test_no_port_parenthesized_subckt_expansion_maps_actual_nets(tmp_path) -> None:
     netlist = tmp_path / "no_port_parenthesized.spice"
     netlist.write_text(
@@ -904,6 +934,7 @@ def test_x_prefixed_pex_primitives_are_not_subckt_instances(tmp_path) -> None:
         """
         .subckt inv in out vss
         XM1 out in vss vss nch w=1u l=0.1u
+        XMM88 out in vss vss nch_ulvt_mac w=1u l=0.1u
         XR1 out mid 12
         XC1 mid vss 4f
         XU1 in out leafcell
@@ -921,10 +952,13 @@ def test_x_prefixed_pex_primitives_are_not_subckt_instances(tmp_path) -> None:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     devices = {device["name"]: device for device in payload["devices"]}
-    assert payload["summary"]["device_kinds"] == {"C": 1, "M": 1, "R": 1, "X": 1}
+    assert payload["summary"]["device_kinds"] == {"C": 1, "M": 2, "R": 1, "X": 1}
     assert devices["XM1"]["kind"] == "M"
     assert devices["XM1"]["model"] == "nch"
     assert devices["XM1"]["pins"] == {"D": "out", "G": "in", "S": "vss", "B": "vss"}
+    assert devices["XMM88"]["kind"] == "M"
+    assert devices["XMM88"]["model"] == "nch_ulvt_mac"
+    assert devices["XMM88"]["pins"] == {"D": "out", "G": "in", "S": "vss", "B": "vss"}
     assert devices["XR1"]["kind"] == "R"
     assert devices["XR1"]["pins"] == {"1": "out", "2": "mid"}
     assert devices["XC1"]["kind"] == "C"

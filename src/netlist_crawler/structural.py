@@ -1233,12 +1233,11 @@ def _parse_known_subckt_instance(
     if not known_subckts:
         return None
     body = tokens[1:]
-    model_idx = None
-    for idx, token in enumerate(body):
-        if token in known_subckts:
-            model_idx = idx
-            break
-    if model_idx is None:
+    positional = [idx for idx, token in enumerate(body) if "=" not in token]
+    if not positional:
+        return None
+    model_idx = positional[-1]
+    if body[model_idx] not in known_subckts:
         return None
     if any("=" in token for token in body[:model_idx]):
         return None
@@ -1261,9 +1260,9 @@ def _parse_known_subckt_instance(
 
 def _parse_x_prefixed_primitive(tokens: list[str], line: str) -> Device | None:
     name = tokens[0]
-    if len(name) < 3 or not name[2].isdigit():
+    kind = _x_prefixed_primitive_kind(name)
+    if kind is None:
         return None
-    kind = name[1].upper()
     if kind not in {"R", "C", "M"}:
         return None
     roles = PIN_ROLES[kind]
@@ -1281,6 +1280,19 @@ def _parse_x_prefixed_primitive(tokens: list[str], line: str) -> Device | None:
         params=_parse_params(tokens[1:]),
         raw=line,
     )
+
+
+def _x_prefixed_primitive_kind(name: str) -> str | None:
+    if len(name) < 3:
+        return None
+    kind = name[1].upper()
+    if kind not in {"R", "C", "M"}:
+        return None
+    if name[2].isdigit():
+        return kind
+    if name[2].upper() == kind and any(char.isdigit() for char in name[3:]):
+        return kind
+    return None
 
 
 def _parse_dollar_pins_x_instance(tokens: list[str]) -> Device | None:
