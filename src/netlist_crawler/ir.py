@@ -77,8 +77,13 @@ def export_ir(
     """Parse a netlist into the persistent workflow IR."""
     text = path.read_text(encoding="utf-8", errors="replace")
     circuit = parse_structural_netlist(path, topcell=topcell, expand_depth=expand_depth)
-    nets = circuit.nets()
-    annotations = _rule_annotations(circuit) if include_rule_annotations else []
+    device_ids = _unique_device_ids(circuit.devices)
+    nets = _nets_with_device_ids(circuit, device_ids)
+    annotations = _rule_annotations(circuit, device_ids=device_ids) if include_rule_annotations else []
+    hierarchy_instances = sorted(
+        circuit.hierarchy_instances,
+        key=lambda item: (len(item.instance_path), item.instance_path, item.id),
+    )
     return {
         "schema": IR_SCHEMA,
         "source": {
@@ -102,7 +107,8 @@ def export_ir(
         },
         "instances": [
             {
-                "id": device.name,
+                "id": device_ids[index],
+                "name": device.name,
                 "kind": device.kind,
                 "scope": device.scope,
                 "model": device.model,
@@ -110,7 +116,7 @@ def export_ir(
                 "params": device.params,
                 "raw": device.raw,
             }
-            for device in circuit.devices
+            for index, device in enumerate(circuit.devices)
         ],
         "nets": [
             {
@@ -122,15 +128,34 @@ def export_ir(
         ],
         "edges": [
             {
-                "id": f"edge:{device.name}:{role}:{net}",
-                "device": device.name,
+                "id": f"edge:{device_ids[index]}:{role}:{net}",
+                "device": device_ids[index],
                 "net": net,
                 "role": role,
                 "type": "pin",
             }
-            for device in circuit.devices
+            for index, device in enumerate(circuit.devices)
             for role, net in device.pins.items()
         ],
+        "hierarchy": {
+            "instances": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "kind": item.kind,
+                    "definition": item.definition,
+                    "scope": item.scope,
+                    "expanded": item.expanded,
+                    "instance_path": item.instance_path,
+                    "port_map": item.port_map,
+                    "member_prefix": item.member_prefix,
+                    "members": item.members,
+                    "pins": item.pins,
+                    "raw": item.raw,
+                }
+                for item in hierarchy_instances
+            ]
+        },
         "annotations": annotations,
     }
 
@@ -181,6 +206,7 @@ def validate_ir(ir: dict) -> dict:
     annotations = ir.get("annotations", [])
     instance_ids = _ids(instances, "instance", errors)
     net_ids = _ids(nets, "net", errors)
+    subckt_ids = _hierarchy_ids(ir.get("hierarchy", {}), errors)
 
     pin_refs = {
         (item.get("id"), role, net)
@@ -203,8 +229,10 @@ def validate_ir(ir: dict) -> dict:
     for ref in sorted(edge_refs - pin_refs):
         warnings.append(_issue("extra_edge", f"edge has no matching instance pin: {ref!r}"))
 
+    _validate_hierarchy(ir.get("hierarchy", {}), instance_ids, net_ids, errors, warnings)
+
     for annotation in annotations:
-        _validate_annotation(annotation, instance_ids, net_ids, errors)
+        _validate_annotation(annotation, instance_ids, net_ids, subckt_ids, errors)
 
     return {
         "valid": not errors,
@@ -263,8 +291,43 @@ def check_annotations(ir: dict) -> dict:
     }
 
 
-def _rule_annotations(circuit: StructuralCircuit) -> list[dict]:
+def _unique_device_ids(devices: list[Device]) -> list[str]:
+    """Return stable unique IR ids while preserving raw instance names separately."""
+    total_counts: dict[str, int] = defaultdict(int)
+    for device in devices:
+        total_counts[device.name] += 1
+    seen: dict[str, int] = defaultdict(int)
+    ids: list[str] = []
+    used: set[str] = set()
+    for device in devices:
+        seen[device.name] += 1
+        if total_counts[device.name] == 1 and device.name not in used:
+            candidate = device.name
+        else:
+            scope = f"{device.scope}." if device.scope else ""
+            candidate = f"{scope}{device.name}#{seen[device.name]}"
+        while candidate in used:
+            candidate = f"{candidate}#"
+        used.add(candidate)
+        ids.append(candidate)
+    return ids
+
+
+def _nets_with_device_ids(circuit: StructuralCircuit, device_ids: list[str]) -> dict[str, list[str]]:
+    nets: dict[str, list[str]] = defaultdict(list)
+    for index, device in enumerate(circuit.devices):
+        device_id = device_ids[index]
+        for role, net in device.pins.items():
+            nets[net].append(f"{device_id}.{role}")
+    return dict(sorted(nets.items()))
+
+
+def _rule_annotations(circuit: StructuralCircuit, *, device_ids: list[str] | None = None) -> list[dict]:
     annotation = annotate_circuit(circuit)
+    raw_to_ids: dict[str, list[str]] = defaultdict(list)
+    if device_ids is not None:
+        for index, device in enumerate(circuit.devices):
+            raw_to_ids[device.name].append(device_ids[index])
     out: list[dict] = []
     counter = 0
     for net in annotation["nets"]:
@@ -284,8 +347,9 @@ def _rule_annotations(circuit: StructuralCircuit) -> list[dict]:
                 "type": "group",
                 "id": f"group:{match['pattern']}:{index}",
                 "members": [
-                    {"type": "device", "id": device}
+                    {"type": "device", "id": device_id}
                     for device in match.get("devices", [])
+                    for device_id in (raw_to_ids.get(device) or [device])
                 ],
             },
             label=match["pattern"],
@@ -349,10 +413,40 @@ def _ids(items: list[dict], kind: str, errors: list[dict]) -> set[str]:
     return seen
 
 
+def _hierarchy_ids(hierarchy: dict, errors: list[dict]) -> set[str]:
+    items = hierarchy.get("instances", []) if isinstance(hierarchy, dict) else []
+    return _ids(items, "subckt", errors)
+
+
+def _validate_hierarchy(
+    hierarchy: dict,
+    instance_ids: set[str],
+    net_ids: set[str],
+    errors: list[dict],
+    warnings: list[dict],
+) -> None:
+    items = hierarchy.get("instances", []) if isinstance(hierarchy, dict) else []
+    for item in items:
+        item_id = item.get("id")
+        if not item_id:
+            continue
+        members = item.get("members", {}) or {}
+        for device in members.get("devices", []):
+            if device not in instance_ids:
+                errors.append(_issue("hierarchy_reference", f"unknown member device {device!r}", hierarchy=item_id))
+        for net in members.get("nets", []):
+            if net not in net_ids:
+                errors.append(_issue("hierarchy_reference", f"unknown member net {net!r}", hierarchy=item_id))
+        for port, net in (item.get("port_map", {}) or {}).items():
+            if net not in net_ids:
+                warnings.append(_issue("hierarchy_port_map", f"port {port!r} maps to unobserved net {net!r}", hierarchy=item_id))
+
+
 def _validate_annotation(
     annotation: dict,
     instance_ids: set[str],
     net_ids: set[str],
+    subckt_ids: set[str],
     errors: list[dict],
 ) -> None:
     target = annotation.get("target") or {}
@@ -364,6 +458,9 @@ def _validate_annotation(
     elif target_type == "net":
         if target_id not in net_ids:
             errors.append(_issue("annotation_reference", f"unknown net {target_id!r}", annotation=annotation.get("id")))
+    elif target_type == "subckt":
+        if target_id not in subckt_ids:
+            errors.append(_issue("annotation_reference", f"unknown subckt {target_id!r}", annotation=annotation.get("id")))
     elif target_type == "group":
         for member in target.get("members", []):
             member_type = member.get("type")
@@ -372,7 +469,9 @@ def _validate_annotation(
                 errors.append(_issue("annotation_reference", f"unknown group device {member_id!r}", annotation=annotation.get("id")))
             elif member_type == "net" and member_id not in net_ids:
                 errors.append(_issue("annotation_reference", f"unknown group net {member_id!r}", annotation=annotation.get("id")))
-            elif member_type not in {"device", "net"}:
+            elif member_type == "subckt" and member_id not in subckt_ids:
+                errors.append(_issue("annotation_reference", f"unknown group subckt {member_id!r}", annotation=annotation.get("id")))
+            elif member_type not in {"device", "net", "subckt"}:
                 errors.append(_issue("annotation_reference", f"unknown group member type {member_type!r}", annotation=annotation.get("id")))
     else:
         errors.append(_issue("annotation_reference", f"unknown target type {target_type!r}", annotation=annotation.get("id")))
@@ -438,13 +537,13 @@ def _labels_by_target(annotations: list[dict]) -> dict[tuple[str, str], set[str]
         target = annotation.get("target") or {}
         target_type = target.get("type")
         target_id = target.get("id")
-        if target_type in {"device", "net"} and target_id:
+        if target_type in {"device", "net", "subckt"} and target_id:
             labels[(target_type, target_id)].add(label)
         elif target_type == "group":
             for member in target.get("members", []):
                 member_type = member.get("type")
                 member_id = member.get("id")
-                if member_type in {"device", "net"} and member_id:
+                if member_type in {"device", "net", "subckt"} and member_id:
                     labels[(member_type, member_id)].add(label)
     return labels
 

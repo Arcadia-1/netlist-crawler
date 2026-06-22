@@ -629,6 +629,309 @@ def test_export_graph_json_includes_semantic_nodes_and_edges() -> None:
     assert any(item["class"] == "signal_input" for item in vinp["classes"])
 
 
+def test_export_graph_preserves_controlled_and_coupled_devices(tmp_path) -> None:
+    netlist = tmp_path / "controlled_sources.sp"
+    netlist.write_text(
+        """
+        .subckt controlled in_p in_n out_p out_n ctrl sense lp ls swp swn
+        E1 out_p out_n in_p in_n vcvs gain=10
+        F1 out_p out_n VSENSE gain=2
+        G1 out_p out_n ctrl 0 vccs gm=1m
+        H1 out_p out_n VSENSE transresistance=5k
+        B1 out_p 0 v=V(in_p,in_n)*2
+        L1 lp 0 1u
+        L2 ls 0 2u
+        K1 L1 L2 k=0.98
+        W1 swp swn ctrl 0 relay vt=0.5
+        .ends controlled
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["export-graph", str(netlist), "--topcell", "controlled", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    devices = {
+        node["name"]: node
+        for node in payload["nodes"]
+        if node["type"] == "device"
+    }
+    assert {"E1", "F1", "G1", "H1", "B1", "K1", "W1"} <= set(devices)
+    assert devices["E1"]["kind"] == "E"
+    assert devices["E1"]["model"] == "vcvs"
+    assert devices["E1"]["params"] == {"gain": "10"}
+    assert devices["F1"]["kind"] == "F"
+    assert devices["K1"]["kind"] == "K"
+    assert devices["W1"]["kind"] == "W"
+    assert any(
+        edge["source"] == "device:F1" and edge["target"] == "net:out_p" and edge["role"] == "OUTP"
+        for edge in payload["edges"]
+    )
+    assert any(
+        edge["source"] == "device:K1" and edge["target"] == "net:L1" and edge["role"] == "L1"
+        for edge in payload["edges"]
+    )
+    assert any(edge["target"] == "net:in_p" for edge in payload["edges"])
+
+
+def test_spectre_parenthesized_multi_terminal_mos_ignores_params(tmp_path) -> None:
+    netlist = tmp_path / "multi_terminal_mos.scs"
+    netlist.write_text(
+        """
+        simulator lang=spectre
+        subckt OR3D1A
+        M6 (Z net21 vss vss vdd SUB) n50_iso_ckt w=(900n) l=600n \\
+            mr=(1) nf=1 as=391.5f ad=391.5f
+        ends OR3D1A
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary_result = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "OR3D1A", "--format", "json"],
+    )
+    assert summary_result.exit_code == 0
+    summary = json.loads(summary_result.output)["summary"]
+    assert summary["device_kinds"] == {"M": 1}
+    assert summary["devices"] == 1
+    assert summary["nets"] == 5
+    assert {item["net"] for item in summary["top_nets"]} == {"Z", "net21", "vss", "vdd", "SUB"}
+
+    graph_result = CliRunner().invoke(
+        main,
+        ["export-graph", str(netlist), "--topcell", "OR3D1A", "--format", "json"],
+    )
+    assert graph_result.exit_code == 0
+    graph = json.loads(graph_result.output)
+    device = next(node for node in graph["nodes"] if node["type"] == "device")
+    assert device["name"] == "M6"
+    assert device["model"] == "n50_iso_ckt"
+    pins = {
+        edge["role"]: edge["target"].removeprefix("net:")
+        for edge in graph["edges"]
+        if edge["source"] == "device:M6"
+    }
+    assert pins == {
+        "D": "Z",
+        "G": "net21",
+        "S": "vss",
+        "B": "vss",
+        "5": "vdd",
+        "6": "SUB",
+    }
+
+
+def test_dollar_pins_x_instances_use_named_port_mapping(tmp_path) -> None:
+    netlist = tmp_path / "dollar_pins.sp"
+    netlist.write_text(
+        """
+        .subckt top CLK EN AGND AVDD AVSS OUT
+        XI12 / ND2D1A $PINS A1=CLK A2=EN SUB=AGND Z=OUT vdd=AVDD vss=AVSS
+        .ends top
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "top", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["summary"]["devices"] == 1
+    assert payload["summary"]["nets"] == 6
+    device = payload["devices"][0]
+    assert device["name"] == "XI12"
+    assert device["model"] == "ND2D1A"
+    assert device["pins"] == {
+        "A1": "CLK",
+        "A2": "EN",
+        "SUB": "AGND",
+        "Z": "OUT",
+        "vdd": "AVDD",
+        "vss": "AVSS",
+    }
+    assert "/" not in payload["nets"]
+    assert "ND2D1A" not in payload["nets"]
+
+
+def test_include_directive_directory_target_does_not_crash(tmp_path) -> None:
+    netlist = tmp_path / "directives.sp"
+    netlist.write_text(
+        """
+        .PARAM VDD=5.0
+        .INCLUDE / PDK/sky130/models/sky130.lib.sp
+        .INCLUDE /missing/pdk/models/rs.scs
+        .LIB /missing/pdk/models/sky130.lib.inc TT
+        .SUBCKT amp VDD VSS IN OUT
+        M1 OUT IN VDD VDD pch W=2u L=0.5u
+        .ENDS amp
+        XAMP1 VDD VSS VIN VOUT amp
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["list-subckts", str(netlist), "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["subcircuits"] == [
+        {"name": "amp", "ports": ["VDD", "VSS", "IN", "OUT"], "params": {}, "devices": 1}
+    ]
+
+
+
+def test_spectre_non_x_prefix_instances_use_subckt_port_mapping(tmp_path) -> None:
+    netlist = tmp_path / "spectre_i_instances.scs"
+    netlist.write_text(
+        """
+        subckt BUSDRV AVDD1 AVSS1 DGND DI33 DO50 DVDD AGND
+        R0 (DO50 DI33) resistor r=1k
+        ends BUSDRV
+
+        subckt TOP AVDD1 AVSS1 DGND DVDD AGND REG0 OUT0
+        I3\\<0\\> (AVDD1 AVSS1 DGND REG0 OUT0 DVDD AGND) BUSDRV
+        I0 BUSDRV
+        ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summarized = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "TOP", "--format", "json"],
+    )
+
+    assert summarized.exit_code == 0
+    payload = json.loads(summarized.output)
+    devices = {device["name"]: device for device in payload["devices"]}
+    assert payload["summary"]["device_kinds"] == {"X": 2}
+    assert devices["I3\\<0\\>"]["model"] == "BUSDRV"
+    assert devices["I3\\<0\\>"]["pins"] == {
+        "1": "AVDD1",
+        "2": "AVSS1",
+        "3": "DGND",
+        "4": "REG0",
+        "5": "OUT0",
+        "6": "DVDD",
+        "7": "AGND",
+    }
+    assert devices["I0"]["model"] == "BUSDRV"
+    assert devices["I0"]["pins"] == {}
+
+    expanded = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            str(netlist),
+            "--topcell",
+            "TOP",
+            "--expand-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert expanded.exit_code == 0
+    expanded_payload = json.loads(expanded.output)
+    expanded_devices = {device["name"]: device for device in expanded_payload["devices"]}
+    assert expanded_devices["I3\\<0\\>.R0"]["pins"] == {"1": "OUT0", "2": "REG0"}
+    assert expanded_devices["I0.R0"]["pins"] == {"1": "I0.DO50", "2": "I0.DI33"}
+
+
+def test_no_port_parenthesized_subckt_expansion_maps_actual_nets(tmp_path) -> None:
+    netlist = tmp_path / "no_port_parenthesized.spice"
+    netlist.write_text(
+        """
+        subckt CHILD
+        M1 (d g s b) nch w=(1u) l=(1u)
+        ends CHILD
+
+        subckt TOP
+        X1 (out in vss vss) CHILD
+        ends TOP
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "summarize",
+            str(netlist),
+            "--topcell",
+            "TOP",
+            "--expand-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    devices = {device["name"]: device for device in payload["devices"]}
+    assert devices["X1.M1"]["pins"] == {
+        "D": "out",
+        "G": "in",
+        "S": "vss",
+        "B": "vss",
+    }
+    assert set(payload["nets"]) == {"out", "in", "vss"}
+    assert not any(net.startswith("X1.") for net in payload["nets"])
+
+
+
+def test_x_prefixed_pex_primitives_are_not_subckt_instances(tmp_path) -> None:
+    netlist = tmp_path / "pex_primitives.sp"
+    netlist.write_text(
+        """
+        .subckt inv in out vss
+        XM1 out in vss vss nch w=1u l=0.1u
+        XR1 out mid 12
+        XC1 mid vss 4f
+        XU1 in out leafcell
+        .ends inv
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["summarize", str(netlist), "--topcell", "inv", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    devices = {device["name"]: device for device in payload["devices"]}
+    assert payload["summary"]["device_kinds"] == {"C": 1, "M": 1, "R": 1, "X": 1}
+    assert devices["XM1"]["kind"] == "M"
+    assert devices["XM1"]["model"] == "nch"
+    assert devices["XM1"]["pins"] == {"D": "out", "G": "in", "S": "vss", "B": "vss"}
+    assert devices["XR1"]["kind"] == "R"
+    assert devices["XR1"]["pins"] == {"1": "out", "2": "mid"}
+    assert devices["XC1"]["kind"] == "C"
+    assert devices["XU1"]["kind"] == "X"
+    assert devices["XU1"]["model"] == "leafcell"
+
+
 def test_export_graph_graphml_smoke() -> None:
     result = CliRunner().invoke(
         main,

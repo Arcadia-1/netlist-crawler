@@ -20,6 +20,13 @@ PIN_ROLES: dict[str, tuple[str, ...]] = {
     "I": ("P", "N"),
     "D": ("A", "K"),
     "Q": ("C", "B", "E", "S"),
+    "B": ("P", "N"),
+    "E": ("OUTP", "OUTN", "INP", "INN"),
+    "F": ("OUTP", "OUTN"),
+    "G": ("OUTP", "OUTN", "INP", "INN"),
+    "H": ("OUTP", "OUTN"),
+    "K": ("L1", "L2"),
+    "W": ("P", "N"),
 }
 
 _INSTANCE_WITH_PARENS = re.compile(r"^(\S+)\s*\((.*?)\)\s*(.*)$")
@@ -56,6 +63,24 @@ class SubcktDef:
 
 
 @dataclass
+class HierarchyInstance:
+    """A subcircuit instance boundary fact preserved during expansion."""
+
+    id: str
+    name: str
+    kind: str
+    definition: str
+    scope: str
+    expanded: bool
+    instance_path: list[str]
+    port_map: dict[str, str]
+    member_prefix: str
+    members: dict[str, list[str]] = field(default_factory=dict)
+    pins: dict[str, str] = field(default_factory=dict)
+    raw: str = ""
+
+
+@dataclass
 class StructuralCircuit:
     """Device/net graph extracted from a SPICE-like netlist."""
 
@@ -67,6 +92,7 @@ class StructuralCircuit:
     parameters: dict[str, str] = field(default_factory=dict)
     expanded: bool = False
     expand_depth: int = 0
+    hierarchy_instances: list[HierarchyInstance] = field(default_factory=list)
 
     def nets(self) -> dict[str, list[str]]:
         nets: dict[str, list[str]] = defaultdict(list)
@@ -113,6 +139,10 @@ class StructuralCircuit:
         }
 
     def to_json_dict(self) -> dict:
+        hierarchy_instances = sorted(
+            self.hierarchy_instances,
+            key=lambda item: (len(item.instance_path), item.instance_path, item.id),
+        )
         return {
             "source": self.source,
             "summary": self.summary(),
@@ -128,6 +158,25 @@ class StructuralCircuit:
                 for device in self.devices
             ],
             "nets": self.nets(),
+            "hierarchy": {
+                "instances": [
+                    {
+                        "id": item.id,
+                        "name": item.name,
+                        "kind": item.kind,
+                        "definition": item.definition,
+                        "scope": item.scope,
+                        "expanded": item.expanded,
+                        "instance_path": item.instance_path,
+                        "port_map": item.port_map,
+                        "member_prefix": item.member_prefix,
+                        "members": item.members,
+                        "pins": item.pins,
+                        "raw": item.raw,
+                    }
+                    for item in hierarchy_instances
+                ]
+            },
         }
 
 
@@ -154,13 +203,16 @@ def parse_structural_netlist(
         if definition is None:
             return circuit
         if expand_depth > 0:
+            hierarchy: list[HierarchyInstance] = []
             circuit.devices = _expand_subckt(
                 subckts,
                 definition,
                 prefix="",
                 net_map={},
                 depth=expand_depth,
+                hierarchy=hierarchy,
             )
+            circuit.hierarchy_instances = hierarchy
             return circuit
         circuit.devices = [
             _copy_device(device, scope=definition.name)
@@ -196,7 +248,13 @@ def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device]
     parameters: dict[str, str] = {}
     current_subckt = ""
     current_def: SubcktDef | None = None
-    for line in _logical_lines(path):
+    lines = list(_logical_lines(path))
+    known_subckts = {
+        header[0]
+        for line in lines
+        if (header := _subckt_header(line.strip())) is not None
+    }
+    for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
@@ -217,7 +275,7 @@ def _parse_netlist_model(path: Path) -> tuple[dict[str, SubcktDef], list[Device]
             directives.append(stripped)
             parameters.update(_param_directive(stripped))
             continue
-        device = _parse_device_line(stripped)
+        device = _parse_device_line(stripped, known_subckts=known_subckts)
         if device is None:
             continue
         if current_def is None:
@@ -234,6 +292,7 @@ def _expand_subckt(
     prefix: str,
     net_map: dict[str, str],
     depth: int,
+    hierarchy: list[HierarchyInstance],
 ) -> list[Device]:
     expanded: list[Device] = []
     for device in definition.devices:
@@ -243,18 +302,48 @@ def _expand_subckt(
         }
         hier_name = f"{prefix}.{device.name}" if prefix else device.name
         child_def = subckts.get(device.model)
-        if device.kind == "X" and child_def is not None and depth > 0:
+        if device.kind == "X" and child_def is not None:
             child_map = _instance_port_map(child_def, device, net_map=net_map, prefix=prefix)
-            expanded.extend(
-                _expand_subckt(
+            is_expanded = depth > 0
+            member_devices: list[str] = []
+            member_nets: list[str] = []
+            if is_expanded:
+                child_devices = _expand_subckt(
                     subckts,
                     child_def,
                     prefix=hier_name,
                     net_map=child_map,
                     depth=depth - 1,
+                    hierarchy=hierarchy,
+                )
+                expanded.extend(child_devices)
+                member_devices = [child.name for child in child_devices]
+                member_nets = sorted(
+                    {
+                        net
+                        for child in child_devices
+                        for net in child.pins.values()
+                        if net.startswith(f"{hier_name}.")
+                    }
+                )
+            hierarchy.append(
+                HierarchyInstance(
+                    id=hier_name,
+                    name=device.name,
+                    kind=device.kind,
+                    definition=child_def.name,
+                    scope=definition.name,
+                    expanded=is_expanded,
+                    instance_path=hier_name.split("."),
+                    port_map=child_map,
+                    member_prefix=f"{hier_name}.",
+                    members={"devices": member_devices, "nets": member_nets},
+                    pins=mapped_pins,
+                    raw=device.raw,
                 )
             )
-            continue
+            if is_expanded:
+                continue
         expanded.append(
             Device(
                 name=hier_name,
@@ -1019,31 +1108,48 @@ def _logical_lines(path: Path, *, seen: set[Path] | None = None) -> Iterable[str
         line = raw.strip()
         if not line or line.startswith(("*", "//", ";")):
             continue
+        continued = line.endswith("\\")
+        if continued:
+            line = line[:-1].rstrip()
         if line.startswith("+"):
             current += " " + line[1:].strip()
+        elif current:
+            current += " " + line
+        else:
+            current = line
+        if continued:
             continue
         if current:
             yield current
             include = _include_path(current, base_dir=path.parent)
-            if include and include.exists():
+            if include and include.is_file():
                 yield from _logical_lines(include, seen=seen)
-        current = line
+        current = ""
     if current:
         yield current
         include = _include_path(current, base_dir=path.parent)
-        if include and include.exists():
+        if include and include.is_file():
             yield from _logical_lines(include, seen=seen)
 
 
-def _parse_device_line(line: str) -> Device | None:
+def _parse_device_line(line: str, *, known_subckts: set[str] | None = None) -> Device | None:
     tokens = _tokenize_instance(line)
     if len(tokens) < 2:
         return None
     name = tokens[0]
     prefix = name[0].upper()
     params = _parse_params(tokens[1:])
+    known_subckt_instance = _parse_known_subckt_instance(tokens, known_subckts or set(), line)
+    if known_subckt_instance is not None:
+        return known_subckt_instance
 
     if prefix == "X":
+        prefixed_primitive = _parse_x_prefixed_primitive(tokens, line)
+        if prefixed_primitive is not None:
+            return prefixed_primitive
+        dollar_pins = _parse_dollar_pins_x_instance(tokens)
+        if dollar_pins is not None:
+            return dollar_pins
         named = _parse_named_x_instance(tokens)
         if named is not None:
             return named
@@ -1062,6 +1168,10 @@ def _parse_device_line(line: str) -> Device | None:
             raw=line,
         )
 
+    parenthesized = _parse_parenthesized_primitive(line, params)
+    if parenthesized is not None:
+        return parenthesized
+
     roles = PIN_ROLES.get(prefix)
     if roles is None:
         return None
@@ -1069,7 +1179,7 @@ def _parse_device_line(line: str) -> Device | None:
         return None
     nets = tokens[1:1 + len(roles)]
     model_idx = 1 + len(roles)
-    model = tokens[model_idx] if model_idx < len(tokens) and "=" not in tokens[model_idx] else ""
+    model = _primitive_model(tokens, prefix, model_idx)
     return Device(
         name=name,
         kind=prefix,
@@ -1078,6 +1188,137 @@ def _parse_device_line(line: str) -> Device | None:
         pins={role: net for role, net in zip(roles, nets)},
         params=params,
         raw=line,
+    )
+
+
+def _parse_parenthesized_primitive(line: str, params: dict[str, str]) -> Device | None:
+    match = _INSTANCE_WITH_PARENS.match(line)
+    if not match:
+        return None
+    name, pins, rest = match.groups()
+    prefix = name[0].upper()
+    roles = PIN_ROLES.get(prefix)
+    if roles is None or prefix == "X":
+        return None
+    pin_tokens = pins.split()
+    if len(pin_tokens) < len(roles):
+        return None
+    rest_tokens = rest.split()
+    model = _primitive_model([name, *pin_tokens, *rest_tokens], prefix, 1 + len(pin_tokens))
+    pin_roles = list(roles) + [str(index) for index in range(len(roles) + 1, len(pin_tokens) + 1)]
+    return Device(
+        name=name,
+        kind=prefix,
+        scope="",
+        model=model,
+        pins={role: net for role, net in zip(pin_roles, pin_tokens)},
+        params=params,
+        raw=line,
+    )
+
+
+def _primitive_model(tokens: list[str], prefix: str, model_idx: int) -> str:
+    if model_idx >= len(tokens) or "=" in tokens[model_idx]:
+        return ""
+    if prefix in {"F", "H", "K"}:
+        return ""
+    return tokens[model_idx]
+
+
+def _parse_known_subckt_instance(
+    tokens: list[str],
+    known_subckts: set[str],
+    line: str,
+) -> Device | None:
+    if not known_subckts:
+        return None
+    body = tokens[1:]
+    model_idx = None
+    for idx, token in enumerate(body):
+        if token in known_subckts:
+            model_idx = idx
+            break
+    if model_idx is None:
+        return None
+    if any("=" in token for token in body[:model_idx]):
+        return None
+
+    pins = {
+        str(idx): net
+        for idx, net in enumerate(body[:model_idx], start=1)
+        if net != "/"
+    }
+    return Device(
+        name=tokens[0],
+        kind="X",
+        scope="",
+        model=body[model_idx],
+        pins=pins,
+        params=_parse_params(body[model_idx + 1:]),
+        raw=line,
+    )
+
+
+def _parse_x_prefixed_primitive(tokens: list[str], line: str) -> Device | None:
+    name = tokens[0]
+    if len(name) < 3 or not name[2].isdigit():
+        return None
+    kind = name[1].upper()
+    if kind not in {"R", "C", "M"}:
+        return None
+    roles = PIN_ROLES[kind]
+    if len(tokens) < 1 + len(roles):
+        return None
+    nets = tokens[1:1 + len(roles)]
+    model_idx = 1 + len(roles)
+    model = _primitive_model(tokens, kind, model_idx)
+    return Device(
+        name=name,
+        kind=kind,
+        scope="",
+        model=model,
+        pins={role: net for role, net in zip(roles, nets)},
+        params=_parse_params(tokens[1:]),
+        raw=line,
+    )
+
+
+def _parse_dollar_pins_x_instance(tokens: list[str]) -> Device | None:
+    try:
+        marker_idx = next(
+            idx for idx, token in enumerate(tokens) if token.upper() == "$PINS"
+        )
+    except StopIteration:
+        return None
+    if marker_idx < 2:
+        return None
+
+    model = tokens[marker_idx - 1]
+    positional_nets = [token for token in tokens[1:marker_idx - 1] if token != "/"]
+    named_pins: dict[str, str] = {}
+    param_tokens: list[str] = []
+    for token in tokens[marker_idx + 1:]:
+        if "=" not in token:
+            param_tokens.append(token)
+            continue
+        key, value = token.split("=", 1)
+        if not key or not value:
+            param_tokens.append(token)
+            continue
+        named_pins[key] = value
+
+    if not named_pins and not positional_nets:
+        return None
+    pins = {str(idx): net for idx, net in enumerate(positional_nets, start=1)}
+    pins.update(named_pins)
+    return Device(
+        name=tokens[0],
+        kind="X",
+        scope="",
+        model=model,
+        pins=pins,
+        params=_parse_params(param_tokens),
+        raw=" ".join(tokens),
     )
 
 
@@ -1138,12 +1379,23 @@ def _instance_port_map(
     prefix: str,
 ) -> dict[str, str]:
     mapped: dict[str, str] = {}
-    for idx, port in enumerate(definition.ports, start=1):
+    ports = definition.ports or _infer_no_port_interface(definition, instance)
+    for idx, port in enumerate(ports, start=1):
         actual = _get_instance_pin(instance, port, str(idx))
         if actual is None:
             continue
         mapped[port] = _map_net(actual, prefix=prefix, net_map=net_map)
     return mapped
+
+
+def _infer_no_port_interface(definition: SubcktDef, instance: Device) -> list[str]:
+    if not instance.pins or not definition.devices:
+        return []
+    first_device = definition.devices[0]
+    candidates = list(first_device.pins.values())
+    if len(candidates) < len(instance.pins):
+        return []
+    return candidates[:len(instance.pins)]
 
 
 def _get_instance_pin(instance: Device, port: str, positional_key: str) -> str | None:
