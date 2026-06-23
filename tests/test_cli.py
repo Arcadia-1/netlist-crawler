@@ -679,6 +679,46 @@ def test_export_graph_preserves_controlled_and_coupled_devices(tmp_path) -> None
     assert any(edge["target"] == "net:in_p" for edge in payload["edges"])
 
 
+def test_spectre_parenthesized_bjt_model_is_not_substrate_net(tmp_path) -> None:
+    netlist = tmp_path / "bjt_model_not_net.scs"
+    netlist.write_text(
+        """
+        simulator lang=spectre
+        subckt BG vcc1 vbe
+        Q0 (vcc1 vcc1 net10) pnp50nwa25_mis_ckt mr=24 mismod_bjt=1
+        Q1 (c b e sub) npn_model area=1
+        ends BG
+        """.strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    graph_result = CliRunner().invoke(
+        main,
+        ["export-graph", str(netlist), "--topcell", "BG", "--format", "json"],
+    )
+    assert graph_result.exit_code == 0
+    graph = json.loads(graph_result.output)
+    devices = {node["name"]: node for node in graph["nodes"] if node["type"] == "device"}
+    assert devices["Q0"]["model"] == "pnp50nwa25_mis_ckt"
+    assert devices["Q1"]["model"] == "npn_model"
+
+    q0_pins = {
+        edge["role"]: edge["target"].removeprefix("net:")
+        for edge in graph["edges"]
+        if edge["source"] == "device:Q0"
+    }
+    assert q0_pins == {"C": "vcc1", "B": "vcc1", "E": "net10"}
+    assert all(edge["target"] != "net:pnp50nwa25_mis_ckt" for edge in graph["edges"])
+
+    q1_pins = {
+        edge["role"]: edge["target"].removeprefix("net:")
+        for edge in graph["edges"]
+        if edge["source"] == "device:Q1"
+    }
+    assert q1_pins == {"C": "c", "B": "b", "E": "e", "S": "sub"}
+
+
 def test_spectre_parenthesized_multi_terminal_mos_ignores_params(tmp_path) -> None:
     netlist = tmp_path / "multi_terminal_mos.scs"
     netlist.write_text(

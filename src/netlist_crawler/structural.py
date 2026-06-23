@@ -1168,6 +1168,11 @@ def _parse_device_line(line: str, *, known_subckts: set[str] | None = None) -> D
             raw=line,
         )
 
+    if prefix == "Q":
+        q_device = _parse_bjt_primitive(tokens, line, params)
+        if q_device is not None:
+            return q_device
+
     parenthesized = _parse_parenthesized_primitive(line, params)
     if parenthesized is not None:
         return parenthesized
@@ -1183,6 +1188,34 @@ def _parse_device_line(line: str, *, known_subckts: set[str] | None = None) -> D
     return Device(
         name=name,
         kind=prefix,
+        scope="",
+        model=model,
+        pins={role: net for role, net in zip(roles, nets)},
+        params=params,
+        raw=line,
+    )
+
+
+def _parse_bjt_primitive(tokens: list[str], line: str, params: dict[str, str]) -> Device | None:
+    """Parse Spectre/SPICE BJT forms with 3 or 4 nodes followed by model.
+
+    Both of these are common:
+      Q0 (C B E) model params...
+      Q0 (C B E S) model params...
+    The model token must not be treated as a substrate net when only three
+    terminals are present.
+    """
+    if not tokens or tokens[0][0].upper() != "Q":
+        return None
+    node_tokens = _leading_node_tokens(tokens[1:])
+    if len(node_tokens) not in {4, 5}:
+        return None
+    nets = node_tokens[:-1]
+    model = node_tokens[-1]
+    roles = PIN_ROLES["Q"][:len(nets)]
+    return Device(
+        name=tokens[0],
+        kind="Q",
         scope="",
         model=model,
         pins={role: net for role, net in zip(roles, nets)},
