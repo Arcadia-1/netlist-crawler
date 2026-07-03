@@ -7,3 +7,16 @@ __pycache__/
 dist/
 build/
 WORK/
+
+# Local-only large/full netlist samples (not distributed with the repo)
+examples/full_designs/*
+!examples/full_designs/*.md
+
+# Local-only Calibre PEX/LVS artifacts pulled from the server (large, not distributed)
+artifacts/*
+!artifacts/calibre_pex/
+artifacts/calibre_pex/*
+!artifacts/calibre_pex/README.md
+
+# Local virtuoso-bridge config
+.env

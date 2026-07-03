@@ -33,7 +33,7 @@ At a glance:
 |---|---|
 | LLM-readable circuit context | `brief`, `annotate` |
 | Persistent workflow IR | `export-ir`, `validate-ir`, `annotation-coverage`, `check-annotations` |
-| Structural discovery | `list-subckts`, `summarize` |
+| Structural discovery | `list-subckts`, `summarize`, `tree` |
 | Graph queries | `neighborhood`, `path`, `export-graph` |
 | Analog semantics | `detect`, `explain`, `explain-net`, `classify-path` |
 | Evaluation hooks | `benchmark` |
@@ -71,6 +71,7 @@ netlist-crawler export-ir examples/simple_diff_pair.sp -o design.nlc.json
 netlist-crawler list-subckts examples/hierarchical_ota.sp --format json
 netlist-crawler list-subckts examples/include_top.sp --format json
 netlist-crawler summarize examples/simple_diff_pair.sp
+netlist-crawler tree examples/hierarchical_ota.sp
 netlist-crawler summarize examples/param_subckt.sp --topcell param_amp --format json
 netlist-crawler summarize examples/two_subckts.sp --topcell bias_block --format json
 netlist-crawler summarize examples/include_top.sp --topcell include_top --expand-depth 1 --format json
@@ -136,9 +137,18 @@ The post-layout parasitic analysis engine is also available through:
 
 ```bash
 netlist-crawler scan examples/parasitics/f1_rc_ladder.flat.scs
+netlist-crawler scan examples/parasitics/f2_diffpair_cc.flat.scs --domains --min-coupling 1f
 netlist-crawler prescribe examples/parasitics/f2_diffpair_cc.flat.scs --nets nIP,nOP -o rc_model.json
 netlist-crawler inject --help
 ```
+
+`scan` emits ranked per-net Σ R / Σ Cg, net-pair coupling, within-net
+pin-to-pin effective R (`--within-net`), and driving-point R (`--trace`). For
+mixed-signal and power-split layouts, `--domains` adds a power-domain
+cross-coupling report: it discovers power domains from supply/ground net names
+(`VDDANA`→`ANA`, `GNDTIA`→`TIA`), separates benign intra-domain decap from
+cross-domain coupling, and flags digital/clock → analog/reference leakage — the
+direct answer to "did the power split keep noise contained?".
 
 ## Example Corpora
 

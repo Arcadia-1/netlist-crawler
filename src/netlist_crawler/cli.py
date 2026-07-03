@@ -114,6 +114,36 @@ def list_subckts(netlist: Path, output_format: str) -> None:
 
 @main.command()
 @click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--topcell", help="Root cell for the tree (else auto-pick the top).")
+@click.option("--max-depth", default=6, show_default=True, help="Tree depth cap.")
+def tree(netlist: Path, topcell: str | None, max_depth: int) -> None:
+    """Show the design hierarchy as an instantiation tree.
+
+    Renders the subckt instantiation DAG from the top cell, with per-cell
+    flattened device counts (memoized — no full flatten), hierarchy depth, and
+    a most-reused-cells leaderboard.
+    """
+    from .hierarchy import build_hierarchy, tree_report
+    h = build_hierarchy(netlist)
+    if topcell:
+        root = topcell
+        if root not in h.defs:
+            raise click.ClickException(f"no such subckt: {root}")
+    elif len(h.roots) == 1:
+        root = h.roots[0]
+    elif h.roots:
+        # multiple roots — pick the one with the most flattened transistors
+        root = max(h.roots, key=lambda c: h.flat_counts(c).get("M", 0))
+        others = [r for r in h.roots if r != root]
+        click.echo(f"# multiple top cells; showing {root} "
+                   f"(others: {', '.join(others)})")
+    else:
+        raise click.ClickException("no subcircuit definitions found")
+    click.echo(tree_report(h, root, max_depth=max_depth))
+
+
+@main.command()
+@click.argument("netlist", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--topcell", help="Restrict analysis to one subcircuit definition.")
 @click.option("--expand-depth", default=0, show_default=True, help="Expand subckt instances.")
 @click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")

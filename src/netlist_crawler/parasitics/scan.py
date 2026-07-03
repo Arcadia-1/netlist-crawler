@@ -89,6 +89,14 @@ def main(argv: list[str] | None = None) -> int:
                          "Off by default — it auto-pairs by name suffix "
                          "and false-flags on designs where SETP/SETN "
                          "or similar names aren't real diff pairs.")
+    ap.add_argument("--domains", action="store_true",
+                    help="include §5 power-domain cross-coupling. Collapses "
+                         "the Cc map onto power domains discovered from "
+                         "supply/ground net names, separates benign "
+                         "intra-domain decap from cross-domain leakage, and "
+                         "flags digital/clock → analog/reference coupling. "
+                         "The headline view for power-split / mixed-signal "
+                         "designs.")
     ap.add_argument("--dut", default=None,
                     help="force a DUT subckt name (else auto-pick)")
     ap.add_argument("--format", default=None, choices=("mrpp", "spectre"),
@@ -141,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         within_net_max_pins=args.within_net_max_pins,
         within_net_top_pairs=args.within_net_top_pairs,
         include_mismatch=args.mismatch,
+        include_domains=args.domains,
     )
 
     if args.output:

@@ -142,6 +142,45 @@ def _pct(a: float, b: float) -> float:
     return (a - b) / m * 100 if m > 0 else 0.0
 
 
+def _emit_section_5_domains(out: io.StringIO, circuit: Circuit) -> None:
+    """Power-domain cross-coupling: did the power split keep noise contained?
+
+    Collapses the per-net-pair Cc map onto power domains (discovered from
+    supply/ground net names), then separates benign intra-domain decap from
+    the cross-domain coupling that actually leaks between blocks.  The last
+    table flags aggressor→victim (digital/clock → analog/reference) pairs.
+    """
+    from .domains import aggregate_domain_coupling
+    agg = aggregate_domain_coupling(per_pair_cc_sum(circuit))
+    domains = agg["domains"]
+    out.write(f"\n## 5. Power-domain coupling  ({len(domains)} domains)\n")
+    if len(domains) < 2:
+        out.write("  (fewer than 2 power domains detected — "
+                  "split-domain analysis not applicable)\n")
+        return
+
+    intra, cross, risky = agg["intra"], agg["cross"], agg["risky"]
+    cross_total = sum(cross.values())
+    intra_total = sum(intra.values())
+    out.write(f"  domains: {', '.join(domains)}\n")
+    out.write(f"  Σ Cc intra-domain (decap, benign) : {_fmt_c(intra_total)}\n")
+    out.write(f"  Σ Cc cross-domain (inter-block)   : {_fmt_c(cross_total)}\n")
+
+    out.write("\n  cross-domain coupling (ranked):\n")
+    out.write(f"    {'domain A':<12s} {'domain B':<12s} {'Σ Cc':>12s}\n")
+    for (a, b), v in sorted(cross.items(), key=lambda kv: -kv[1])[:20]:
+        out.write(f"    {a:<12s} {b:<12s} {_fmt_c(v):>12s}\n")
+
+    out.write("\n  ⚠ aggressor→victim (digital/clock ↔ analog/reference; "
+              "heuristic):\n")
+    if not risky:
+        out.write("    none — no digital/clock domain couples to an "
+                  "analog/reference domain above threshold.\n")
+    else:
+        for a, b, v in risky[:15]:
+            out.write(f"    {a:<12s} {b:<12s} {_fmt_c(v):>12s}\n")
+
+
 def _emit_section_6_drilldown(out: io.StringIO, circuit: Circuit, n_nets: int) -> None:
     cg = per_net_cg_sum(circuit)
     heavy = [net for net, _ in _rank_desc(cg)[:n_nets]]
@@ -336,6 +375,7 @@ def build_report(
     within_net_max_pins: int = 40,
     within_net_top_pairs: int = 10,
     include_mismatch: bool = False,
+    include_domains: bool = False,
 ) -> str:
     """Return the full text report for a Circuit.
 
@@ -367,6 +407,8 @@ def build_report(
     _emit_section_3_cc(out, circuit, top, min_coupling)
     if include_mismatch:
         _emit_section_4_mismatch(out, circuit)
+    if include_domains:
+        _emit_section_5_domains(out, circuit)
     _emit_section_6_drilldown(out, circuit, drilldown_n)
     _emit_section_7_flags(out, circuit)
     _emit_section_8_trace(out, circuit, trace_pairs or [])
