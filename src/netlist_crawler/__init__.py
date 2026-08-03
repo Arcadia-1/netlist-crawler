@@ -26,6 +26,16 @@ from .structural import (
     parse_structural_netlist,
 )
 
+from .translate import (
+    ConsistencyResult,
+    TranslationError,
+    TranslationIssue,
+    TranslationResult,
+    convert_file,
+    convert_text,
+    verify_spectre_spice,
+)
+
 __version__ = "0.1.0"
 
 __all__ = [
@@ -51,4 +61,11 @@ __all__ = [
     "run_benchmark",
     "validate_ir",
     "write_ir",
+    "ConsistencyResult",
+    "TranslationError",
+    "TranslationIssue",
+    "TranslationResult",
+    "convert_file",
+    "convert_text",
+    "verify_spectre_spice",
 ]

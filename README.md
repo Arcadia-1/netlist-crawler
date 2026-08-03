@@ -35,6 +35,7 @@ At a glance:
 | Persistent workflow IR | `export-ir`, `validate-ir`, `annotation-coverage`, `check-annotations` |
 | Structural discovery | `list-subckts`, `summarize` |
 | Graph queries | `neighborhood`, `path`, `export-graph` |
+| Dialect translation | `convert`, `verify-equivalence` |
 | Analog semantics | `detect`, `explain`, `explain-net`, `classify-path` |
 | Evaluation hooks | `benchmark` |
 | Post-layout parasitic analysis | `scan`, `prescribe`, `inject` |
@@ -85,6 +86,8 @@ netlist-crawler explain examples/simple_diff_pair.sp --device M1
 netlist-crawler explain-net examples/simple_diff_pair.sp --net vbias --format json
 netlist-crawler classify-path examples/simple_diff_pair.sp --from vinp --to voutp --format json
 netlist-crawler export-graph examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
+netlist-crawler convert examples/translation/inverter.scs --from spectre --to ngspice --fragment -o inverter.spi
+netlist-crawler verify-equivalence examples/translation/inverter.scs examples/translation/inverter.spi
 ```
 
 `annotate` labels devices and nets with semantic roles. `brief` emits a compact
@@ -104,6 +107,14 @@ differential pairs, current mirrors, tail current sources, active loads,
 cascodes, signal/bias/supply path evidence, and confidence fields in JSON
 output. `export-graph` emits a stable bipartite device-net graph in JSON or
 GraphML for downstream agent workflows and visualization.
+
+`convert` translates a strict, pragmatic Spectre/SPICE subset without changing
+the source file. Generic mode is PDK-neutral. Select `--profile sky130` only
+when Sky130 include and macro-device mapping is intended; full decks then need
+`--model-lib` or `--pdk-root`, while `--fragment` omits the model include.
+`--permissive` keeps going on unsupported statements and reports every lossy
+event. `verify-equivalence` compares both SCS→SPICE and
+SPICE→SCS→SPICE normalized structures.
 
 `benchmark` runs JSON task files that assert expected structural and semantic
 behavior. The seed task file is intentionally small; it is the starting point
