@@ -1,0 +1,7 @@
+simulator lang=spectre
+// MOS terminal order: D G S B (drain gate source bulk/body)
+parameters WN=1u WP=2u L=180n
+subckt inverter in out vdd vss
+M1 (out in vss vss) nch w=WN l=L
+M2 (out in vdd vdd) pch w=WP l=L
+ends inverter

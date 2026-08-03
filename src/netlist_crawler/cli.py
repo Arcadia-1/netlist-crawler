@@ -519,6 +519,121 @@ def check_annotations(ir_path: Path, output_format: str) -> None:
         raise SystemExit(1)
 
 
+@main.command("convert")
+@click.argument("input_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("-o", "--output", required=True, type=click.Path(dir_okay=False, path_type=Path))
+@click.option(
+    "--from",
+    "source_dialect",
+    required=True,
+    type=click.Choice(["spectre", "spice", "ngspice"]),
+    help="Input netlist dialect.",
+)
+@click.option(
+    "--to",
+    "target_dialect",
+    required=True,
+    type=click.Choice(["spectre", "spice", "ngspice"]),
+    help="Output netlist dialect.",
+)
+@click.option(
+    "--profile",
+    type=click.Choice(["generic", "sky130"]),
+    default="generic",
+    show_default=True,
+    help="Optional, explicitly selected PDK mapping profile.",
+)
+@click.option("--fragment", is_flag=True, help="Emit an include-safe fragment without final .end.")
+@click.option("--model-lib", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--pdk-root", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--corner", default="tt", show_default=True)
+@click.option("--strict/--permissive", default=True, show_default=True,
+              help="Fail on unsupported syntax, or emit diagnostics and continue.")
+def convert_netlist(
+    input_path: Path,
+    output: Path,
+    source_dialect: str,
+    target_dialect: str,
+    profile: str,
+    fragment: bool,
+    model_lib: Path | None,
+    pdk_root: Path | None,
+    corner: str,
+    strict: bool,
+) -> None:
+    """Translate a netlist between pragmatic Spectre and SPICE subsets."""
+    from .translate import TranslationError, convert_file
+
+    try:
+        result = convert_file(
+            input_path,
+            output,
+            source=source_dialect,
+            target=target_dialect,
+            profile=None if profile == "generic" else profile,
+            fragment=fragment,
+            model_lib=model_lib,
+            pdk_root=pdk_root,
+            corner=corner,
+            strict=strict,
+        )
+    except (OSError, TranslationError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    for issue in result.issues:
+        click.echo(
+            f"warning:{issue.line}: [{issue.code}] {issue.message}: {issue.statement}",
+            err=True,
+        )
+    click.echo(f"wrote {output}")
+
+
+@main.command("verify-equivalence")
+@click.argument("scs_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("spice_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--profile",
+    type=click.Choice(["generic", "sky130"]),
+    default="generic",
+    show_default=True,
+)
+@click.option("--model-lib", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--pdk-root", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--corner", default="tt", show_default=True)
+@click.option("--strict/--permissive", default=True, show_default=True)
+def verify_equivalence(
+    scs_path: Path,
+    spice_path: Path,
+    profile: str,
+    model_lib: Path | None,
+    pdk_root: Path | None,
+    corner: str,
+    strict: bool,
+) -> None:
+    """Check SCS→SPICE and SPICE→SCS→SPICE structural consistency."""
+    from .translate import TranslationError, verify_spectre_spice
+
+    try:
+        result = verify_spectre_spice(
+            scs_path,
+            spice_path,
+            profile=None if profile == "generic" else profile,
+            model_lib=model_lib,
+            pdk_root=pdk_root,
+            corner=corner,
+            strict=strict,
+        )
+    except (OSError, TranslationError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"SCS -> SPICE: {'ok' if result.equivalent else 'different'}")
+    click.echo(f"SPICE -> SCS -> SPICE: {'ok' if result.roundtrip_equivalent else 'different'}")
+    if result.pair_diff:
+        click.echo(result.pair_diff)
+    if result.roundtrip_diff:
+        click.echo(result.roundtrip_diff)
+    if not result.ok:
+        raise SystemExit(1)
+
+
 @main.command(
     add_help_option=False,
     context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
