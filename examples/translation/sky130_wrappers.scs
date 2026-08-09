@@ -1,0 +1,5 @@
+simulator lang=spectre
+subckt demo d g s b c0 c1
+PM0 (d g s b) pfet_01v8_lvt w=8u l=2u m=48
+C0 (c0 c1) cap_mim_m3_1 l=4u w=4u m=30
+ends demo

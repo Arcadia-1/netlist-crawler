@@ -1,0 +1,5 @@
+.subckt demo d g s b c0 c1
+XPM0 d g s b sky130_fd_pr__pfet_01v8_lvt w=8 l=2 m=48 mult=48
+XC0 c0 c1 sky130_fd_pr__cap_mim_m3_1 l=4 w=4 m=30 mult=30
+.ends demo
+.end

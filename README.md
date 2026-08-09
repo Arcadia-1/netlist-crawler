@@ -88,6 +88,7 @@ netlist-crawler classify-path examples/simple_diff_pair.sp --from vinp --to vout
 netlist-crawler export-graph examples/hierarchical_ota.sp --topcell ota_top --expand-depth 1 --format json
 netlist-crawler convert examples/translation/inverter.scs --from spectre --to ngspice --fragment -o inverter.spi
 netlist-crawler verify-equivalence examples/translation/inverter.scs examples/translation/inverter.spi
+netlist-crawler verify-equivalence examples/translation/sky130_wrappers.scs examples/translation/sky130_wrappers.spi --profile sky130
 ```
 
 `annotate` labels devices and nets with semantic roles. `brief` emits a compact
@@ -115,6 +116,22 @@ when Sky130 include and macro-device mapping is intended; full decks then need
 `--permissive` keeps going on unsupported statements and reports every lossy
 event. `verify-equivalence` compares both SCS→SPICE and
 SPICE→SCS→SPICE normalized structures.
+
+Spectre `stb` has no native ngspice directive. Conversion therefore keeps the
+circuit fragment and emits a non-fatal structured `analysis-stb` diagnostic
+containing the probe, local ground, and sweep. The caller must turn that
+boundary into an explicit Middlebrook return-ratio AC bench; the analysis is
+never silently discarded or mislabeled as an unsupported circuit primitive.
+
+Spectre frequency-sweep `xf` analyses are handled the same way: the converter
+emits an `analysis-xf` diagnostic and an actionable comment requiring explicit
+per-source ngspice AC transfer benches. It never emits a fake `X...` instance.
+
+The Sky130 profile maps Cadence's short LVT-FET and MIM-capacitor masters to
+the continuous ngspice wrappers and converts their geometry from metres to
+micrometres. For those wrappers Spectre `m=N` becomes both ngspice X-instance
+`m=N` (nominal electrical multiplicity) and wrapper `mult=N` (mismatch area).
+`mult` must not replace `m`.
 
 `benchmark` runs JSON task files that assert expected structural and semantic
 behavior. The seed task file is intentionally small; it is the starting point
