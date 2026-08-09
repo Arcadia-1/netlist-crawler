@@ -55,7 +55,13 @@ _SPECTRE_INCLUDE_RE = re.compile(
     r'^include\s+"([^"]+)"(?:\s+section\s*=\s*(\S+))?.*$', re.IGNORECASE
 )
 _NUMBER_RE = re.compile(
-    r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?([TGMKkmunpfa])?$"
+    r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(meg|[TGMKkmunpfa])?$"
+)
+_SPECTRE_EXPRESSION_NUMBER_RE = re.compile(
+    r"(?<![A-Za-z0-9_.$])"
+    r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+    r"(meg|[TGMKkmunpfa])"
+    r"(?![A-Za-z0-9_])"
 )
 _SPICE_NUMBER_RE = re.compile(
     r"^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(meg|[tgkmunpfa])?$",
@@ -73,6 +79,7 @@ _SPECTRE_SUFFIX = {
     "p": 1e-12,
     "f": 1e-15,
     "a": 1e-18,
+    "meg": 1e6,
 }
 _SPICE_SUFFIX = {
     "t": 1e12,
@@ -87,6 +94,36 @@ _SPICE_SUFFIX = {
     "a": 1e-18,
 }
 _ANALYSES = {"tran", "ac", "dc", "noise", "op"}
+_NGSPICE_OPTIONS = {
+    "abstol",
+    "chgtol",
+    "defad",
+    "defas",
+    "defl",
+    "defw",
+    "gmin",
+    "itl1",
+    "itl2",
+    "itl4",
+    "method",
+    "pivrel",
+    "reltol",
+    "scale",
+    "tnom",
+    "trtol",
+    "vntol",
+}
+_SPECTRE_OPTION_ALIASES = {"iabstol": "abstol", "vabstol": "vntol"}
+_KNOWN_SPECTRE_ONLY_OPTIONS = {
+    "checklimitdest",
+    "cols",
+    "digits",
+    "maxnotes",
+    "maxwarns",
+    "rforce",
+    "scalem",
+    "sensfile",
+}
 _SPICE_CONTROL_NOOPS = {
     "destroy",
     "display",
@@ -278,7 +315,7 @@ def _spectre_statement_to_spice(
         return [".save " + " ".join(fields[1:])]
     if head == "options" or (len(fields) >= 2 and fields[1].lower() == "options"):
         body = fields[1:] if head == "options" else fields[2:]
-        return [".options " + " ".join(body)]
+        return _spectre_options_to_spice(body, line, statement, strict, issues)
     if head == "temp":
         body = " ".join(fields[1:]).lstrip("=").strip()
         return [".temp " + _spectre_value(body)]
@@ -292,6 +329,35 @@ def _spectre_statement_to_spice(
         return [".ic " + " ".join(assignments)] if assignments else []
 
     analysis = fields[1].lower() if len(fields) >= 2 else ""
+    if analysis == "info":
+        # These statements select PSF metadata tables.  ngspice has no
+        # equivalent directive, and they do not change circuit equations or
+        # analyses.  Preserve the decision in the generated deck instead of
+        # silently discarding the statement.
+        return [f"* handled Spectre PSF metadata no-op: {statement}"]
+    if analysis == "stb":
+        params = _param_dict(fields[2:])
+        probe = params.get("probe", "<unspecified>")
+        localgnd = params.get("localgnd", "0")
+        sweep = next((key for key in ("dec", "lin", "oct") if key in params), "dec")
+        points = params.get(sweep, "20")
+        start = _spectre_value(params.get("start", "1"))
+        stop = _spectre_value(params.get("stop", "1G"))
+        issues.append(
+            TranslationIssue(
+                line,
+                "analysis-stb",
+                "Spectre stb has no native ngspice directive; circuit was retained, "
+                f"but probe {probe} must be replaced by an explicit Middlebrook "
+                "return-ratio AC bench",
+                statement,
+            )
+        )
+        return [
+            "* analysis-stb: manual Middlebrook return-ratio bench required; "
+            f"probe={probe} localgnd={localgnd} sweep={sweep} "
+            f"points={points} start={start} stop={stop}"
+        ]
     if analysis in _ANALYSES:
         params = _param_dict(fields[2:])
         return _spectre_analysis_to_spice(fields[0], analysis, params, line, statement, strict, issues)
@@ -302,6 +368,27 @@ def _spectre_statement_to_spice(
     name, node_text, master, rest = match.groups()
     nodes = _split_fields(node_text)
     params = _param_dict(_split_fields(rest or ""))
+    if master.lower() == "xf":
+        sweep = next((key for key in ("dec", "lin", "oct") if key in params), "dec")
+        points = params.get(sweep, "40")
+        start = _spectre_value(params.get("start", "1"))
+        stop = _spectre_value(params.get("stop", "1G"))
+        output = " ".join(nodes) or "<unspecified>"
+        issues.append(
+            TranslationIssue(
+                line,
+                "analysis-xf",
+                "Spectre xf frequency-sweep transfer functions have no direct "
+                "ngspice directive; circuit was retained, but each independent "
+                "source must be evaluated with an explicit AC transfer bench",
+                statement,
+            )
+        )
+        return [
+            "* analysis-xf: explicit per-source AC transfer bench required; "
+            f"output={output} sweep={sweep} points={points} "
+            f"start={start} stop={stop}"
+        ]
     return [_spectre_instance_to_spice(name, nodes, master, params, profile)]
 
 
@@ -340,7 +427,10 @@ def _spectre_analysis_to_spice(
     if analysis == "dc":
         source = params.get("source") or params.get("dev") or params.get("param")
         if not source:
-            return _unsupported(line, "dc-source", "dc analysis needs source=", statement, strict, issues)
+            # ADE emits `dcOp dc` for an operating-point analysis.  A real DC
+            # sweep always names source=/dev=/param=; the no-source form is
+            # therefore the Spectre spelling of ngspice `.op`.
+            return [".op"]
         start = _spectre_value(params.get("start", "0"))
         stop = _spectre_value(params.get("stop", "1"))
         step = _spectre_value(params.get("step", "0.01"))
@@ -355,6 +445,62 @@ def _spectre_analysis_to_spice(
     return _unsupported(line, "analysis", f"unsupported analysis {name} {analysis}", statement, strict, issues)
 
 
+def _spectre_options_to_spice(
+    tokens: list[str],
+    line: int,
+    statement: str,
+    strict: bool,
+    issues: list[TranslationIssue],
+) -> list[str]:
+    """Translate simulator options without leaking Spectre-only keys.
+
+    Known reporting/output controls are rendered as explicit comments because
+    they do not affect the electrical equations.  Unknown options remain hard
+    errors in strict mode so conversion never hides an unsupported semantic.
+    """
+
+    translated: list[str] = []
+    comments: list[str] = []
+    temperature: str | None = None
+    for token in tokens:
+        if "=" not in token:
+            return _unsupported(
+                line, "option", "cannot parse Spectre option", statement, strict, issues)
+        key, value = token.split("=", 1)
+        lowered = key.lower()
+        if lowered == "temp":
+            temperature = _spectre_value(value)
+            continue
+        if lowered == "save":
+            comments.append(f"save={value}")
+            continue
+        mapped = _SPECTRE_OPTION_ALIASES.get(lowered, lowered)
+        if mapped in _NGSPICE_OPTIONS:
+            translated.append(f"{mapped}={_spectre_value(value)}")
+            continue
+        if lowered in _KNOWN_SPECTRE_ONLY_OPTIONS:
+            comments.append(f"{key}={value}")
+            continue
+        return _unsupported(
+            line,
+            "option",
+            f"unsupported Spectre simulator option {key}",
+            statement,
+            strict,
+            issues,
+        )
+
+    output: list[str] = []
+    if translated:
+        output.append(".options " + " ".join(translated))
+    if temperature is not None:
+        output.append(".temp " + temperature)
+    if comments:
+        output.append(
+            "* handled Spectre-only output/reporting options: " + " ".join(comments))
+    return output
+
+
 def _spectre_instance_to_spice(
     name: str,
     nodes: list[str],
@@ -362,6 +508,11 @@ def _spectre_instance_to_spice(
     params: dict[str, str],
     profile: TranslationProfile | None,
 ) -> str:
+    source_master = master
+    if profile is not None:
+        master = profile.map_master(master)
+        nodes = profile.map_nodes(source_master, nodes)
+        params = profile.map_parameters(source_master, params)
     lowered = master.lower()
     if lowered in {"vsource", "isource"}:
         return _spectre_source_to_spice(name, nodes, lowered, params)
@@ -382,12 +533,25 @@ def _spectre_instance_to_spice(
         if "i" in params:
             return f"{_prefixed_name('B', name)} {' '.join(nodes)} I={_spectre_value(params['i'])}"
 
-    is_profile_subckt = profile is not None and lowered in profile.subcircuit_masters
+    is_profile_subckt = profile is not None and (
+        source_master.lower() in profile.subcircuit_masters
+        or source_master.lower() != lowered
+    )
     if name[:1].upper() in {"M", "D", "Q"} and not is_profile_subckt:
         prefix = name[:1].upper()
     else:
         prefix = "X"
-    param_text = " ".join(f"{key}={_spectre_value(value)}" for key, value in params.items())
+    rendered_params = []
+    for key, value in params.items():
+        rendered = _spectre_value(value)
+        scale = profile.parameter_scale(source_master, key) if profile is not None else 1.0
+        if scale != 1.0:
+            try:
+                rendered = f"{float(rendered) * scale:.12g}"
+            except ValueError:
+                rendered = "{(%s)*%.12g}" % (rendered.strip("{}"), scale)
+        rendered_params.append(f"{key}={rendered}")
+    param_text = " ".join(rendered_params)
     return f"{_prefixed_name(prefix, name)} {' '.join(nodes)} {master} {param_text}".rstrip()
 
 
@@ -407,9 +571,23 @@ def _spectre_source_to_spice(
     if mag is not None:
         parts.extend(["AC", _spectre_value(mag)])
     if source_type == "pulse":
-        keys = ("val0", "val1", "delay", "rise", "fall", "width", "period")
-        defaults = ("0", "0", "0", "1p", "1p", "1n", "2n")
-        values = [_spectre_value(params.pop(key, default)) for key, default in zip(keys, defaults)]
+        leading = [
+            _spectre_value(params.pop("val0", "0")),
+            _spectre_value(params.pop("val1", "0")),
+            _spectre_value(params.pop("delay", "0")),
+            _spectre_value(params.pop("rise", "1p")),
+            _spectre_value(params.pop("fall", "1p")),
+        ]
+        period = _spectre_value(params.pop("period", "2n"))
+        width_raw = params.pop("width", None)
+        if width_raw is None:
+            if period.startswith("{") and period.endswith("}"):
+                width = "{(%s)/2}" % period[1:-1]
+            else:
+                width = f"{float(period) / 2:.12g}"
+        else:
+            width = _spectre_value(width_raw)
+        values = [*leading, width, period]
         parts.append("PULSE(" + " ".join(values) + ")")
     elif source_type == "sine":
         keys = ("sinedc", "ampl", "freq", "delay")
@@ -559,11 +737,16 @@ def _spice_instance_to_spectre(
         params = " ".join(_spice_param(token) for token in fields[6:])
         return f"{name} ({' '.join(fields[1:5])}) {fields[5]} {params}".rstrip()
     if prefix in {"D", "Q"}:
-        node_count = 2 if prefix == "D" else 3
-        if len(fields) >= node_count + 2:
-            nodes = fields[1:1 + node_count]
-            master = fields[1 + node_count]
-            params = " ".join(_spice_param(token) for token in fields[2 + node_count:])
+        minimum_nodes = 2 if prefix == "D" else 3
+        first_param = next(
+            (index for index, token in enumerate(fields[1:], start=1) if "=" in token),
+            len(fields),
+        )
+        master_index = first_param - 1
+        if master_index >= minimum_nodes + 1:
+            nodes = fields[1:master_index]
+            master = fields[master_index]
+            params = " ".join(_spice_param(token) for token in fields[master_index + 1:])
             return f"{name} ({' '.join(nodes)}) {master} {params}".rstrip()
     if prefix == "X" and len(fields) >= 3:
         first_param = next((index for index, token in enumerate(fields[1:], start=1) if "=" in token), len(fields))
@@ -735,14 +918,21 @@ def _spice_param(token: str) -> str:
 
 def _spectre_value(value: str) -> str:
     value = value.strip()
-    if value.startswith("{") and value.endswith("}"):
-        return value
+    braced = value.startswith("{") and value.endswith("}")
+    raw = value[1:-1] if braced else value
     match = _NUMBER_RE.match(value)
     if match:
         suffix = match.group(1)
-        base = float(value[:-1] if suffix else value)
+        suffix_length = len(suffix) if suffix else 0
+        base = float(value[:-suffix_length] if suffix_length else value)
         return f"{base * (_SPECTRE_SUFFIX[suffix] if suffix else 1):.12g}"
-    return "{" + value + "}"
+
+    def replace_expression_number(match: re.Match[str]) -> str:
+        base, suffix = match.groups()
+        return f"{float(base) * _SPECTRE_SUFFIX[suffix]:.12g}"
+
+    translated = _SPECTRE_EXPRESSION_NUMBER_RE.sub(replace_expression_number, raw)
+    return "{" + translated + "}"
 
 
 def _spice_value(value: str) -> str:
