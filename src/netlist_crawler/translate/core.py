@@ -389,6 +389,16 @@ def _spectre_statement_to_spice(
             f"output={output} sweep={sweep} points={points} "
             f"start={start} stop={stop}"
         ]
+    if master.lower() in {"resistor", "capacitor", "inductor"}:
+        key = {"resistor": "r", "capacitor": "c", "inductor": "l"}[master.lower()]
+        allowed = {key, "m"} | ({"isnoisy"} if key == "r" else {"ic"})
+        unknown = set(params) - allowed
+        if unknown:
+            return _unsupported(line, "passive-parameter", "unsupported passive parameters: "
+                                + ", ".join(sorted(unknown)), statement, strict, issues)
+        if "isnoisy" in params and params["isnoisy"].lower() not in {"yes", "no", "1", "0"}:
+            return _unsupported(line, "passive-noise", "isnoisy must be yes/no or 1/0",
+                                statement, strict, issues)
     return [_spectre_instance_to_spice(name, nodes, master, params, profile)]
 
 
@@ -523,7 +533,13 @@ def _spectre_instance_to_spice(
             "inductor": ("L", "l"),
         }[lowered]
         value = _spectre_value(params.pop(key, "0"))
-        return f"{_prefixed_name(prefix, name)} {' '.join(nodes)} {value}"
+        extras = []
+        for option, raw in params.items():
+            if option == "isnoisy":
+                extras.append("noisy=" + ("1" if raw.lower() in {"yes", "1"} else "0"))
+            else:
+                extras.append(f"{option}={_spectre_value(raw)}")
+        return f"{_prefixed_name(prefix, name)} {' '.join(nodes)} {value} {' '.join(extras)}".rstrip()
     if lowered == "vcvs":
         gain = _spectre_value(params.pop("gain", "1"))
         return f"{_prefixed_name('E', name)} {' '.join(nodes)} {gain}"
@@ -726,7 +742,24 @@ def _spice_instance_to_spectre(
             "C": ("capacitor", "c"),
             "L": ("inductor", "l"),
         }[prefix]
-        return f"{name} ({fields[1]} {fields[2]}) {master} {key}={_spice_value(fields[3])}"
+        allowed = {"m"} | ({"noisy"} if prefix == "R" else {"ic"})
+        params = _param_dict(fields[4:])
+        if any("=" not in token for token in fields[4:]) or set(params) - allowed:
+            _unsupported(line, "passive-parameter", "unsupported SPICE passive parameters",
+                         statement, strict, issues, prefix="//")
+            return f"// unsupported SPICE passive: {statement}"
+        if "noisy" in params and params["noisy"] not in {"0", "1"}:
+            _unsupported(line, "passive-noise", "noisy must be 0 or 1",
+                         statement, strict, issues, prefix="//")
+            return f"// unsupported SPICE passive: {statement}"
+        extras = []
+        for option, raw in params.items():
+            if option == "noisy":
+                extras.append("isnoisy=" + ("yes" if raw == "1" else "no"))
+            else:
+                extras.append(f"{option}={_spice_value(raw)}")
+        return (f"{name} ({fields[1]} {fields[2]}) {master} "
+                f"{key}={_spice_value(fields[3])} {' '.join(extras)}").rstrip()
     if prefix in {"V", "I"} and len(fields) >= 3:
         return _spice_source_to_spectre(name, fields[1:3], " ".join(fields[3:]))
     if prefix == "E" and len(fields) >= 6:
